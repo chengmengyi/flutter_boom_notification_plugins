@@ -334,6 +334,28 @@ class FlutterBoomNotificationPluginsPlugin :
             return !NotificationRemoteConfigManager.areNotificationsEnabled(context)
         }
 
+        fun isNotificationTypeEnabled(
+            context: Context,
+            payload: String?,
+        ): Boolean {
+            val key =
+                when (payload?.trim()) {
+                    "fcm" -> NotificationRemoteConfigManager.KEY_FCM_ENABLED
+                    "local" -> NotificationRemoteConfigManager.KEY_SCHEDULED_ENABLED
+                    "media" -> NotificationRemoteConfigManager.KEY_MEDIA_ENABLED
+                    "lock" -> NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED
+                    in ACTION_PAYLOAD_TYPES -> NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED
+                    else -> return !isNotificationBlocked(context)
+                }
+            return NotificationRemoteConfigManager.isFeatureEnabled(context, key)
+        }
+
+        fun isPersistentNotificationEnabled(context: Context): Boolean =
+            NotificationRemoteConfigManager.isFeatureEnabled(
+                context,
+                NotificationRemoteConfigManager.KEY_PERSISTENT_ENABLED,
+            )
+
         fun canPostNotifications(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
@@ -763,6 +785,13 @@ class FlutterBoomNotificationPluginsPlugin :
                 mainHandler.postDelayed(
                     {
                         try {
+                            if (!isNotificationTypeEnabled(appContext, payload)) {
+                                Log.d(
+                                    TAG,
+                                    "headsUpRefresh skipped refreshIndex=$index, type switch off tag=$tag id=$id payload=$payload",
+                                )
+                                return@postDelayed
+                            }
                             if (isDeviceLocked(appContext)) {
                                 Log.d(
                                     TAG,
@@ -823,6 +852,10 @@ class FlutterBoomNotificationPluginsPlugin :
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
         ) {
+            if (!isNotificationTypeEnabled(context, payload)) {
+                Log.d(TAG, "showNotification skipped by type switch payload=$payload")
+                return
+            }
             var repeatAttemptStarted = false
             try {
                 KeepAliveNotificationHelper.prepareForDynamicNotification(
@@ -1806,6 +1839,10 @@ class FlutterBoomNotificationPluginsPlugin :
             reason: String,
             recordDisplayedBeforePermission: Boolean = false,
         ): Boolean {
+            if (!isNotificationTypeEnabled(context, "media")) {
+                Log.d(TAG, "showLocalTriggeredMediaNotification blocked by media switch reason=$reason")
+                return false
+            }
             TimerOverlayHelper.tryShowForMediaTrigger(context, reason)
             if (!shouldShowMediaTag(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
@@ -2064,6 +2101,14 @@ class FlutterBoomNotificationPluginsPlugin :
             context: Context,
             action: String?,
         ) {
+            if (!NotificationRemoteConfigManager.isFeatureEnabled(
+                    context,
+                    NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED,
+                )
+            ) {
+                Log.d(TAG, "handleUnlockBroadcast blocked by broadcast switch action=$action")
+                return
+            }
             val sharedPrefs = prefs(context)
             if (!sharedPrefs.getBoolean(KEY_UNLOCK_ENABLED, false)) {
                 Log.d(TAG, "handleUnlockBroadcast disabled action=$action")
@@ -2884,7 +2929,7 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
+        if (!isPersistentNotificationEnabled(applicationContext)) {
             result.success(null)
             return
         }
@@ -2907,7 +2952,11 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
+        if (!NotificationRemoteConfigManager.isFeatureEnabled(
+                applicationContext,
+                NotificationRemoteConfigManager.KEY_FCM_ENABLED,
+            )
+        ) {
             result.success(false)
             return
         }
@@ -2988,7 +3037,7 @@ class FlutterBoomNotificationPluginsPlugin :
         result: Result,
         payload: String,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
+        if (!isNotificationTypeEnabled(applicationContext, payload)) {
             result.success(null)
             return
         }
@@ -3105,7 +3154,11 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
+        if (!NotificationRemoteConfigManager.isFeatureEnabled(
+                applicationContext,
+                NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED,
+            )
+        ) {
             result.success(null)
             return
         }

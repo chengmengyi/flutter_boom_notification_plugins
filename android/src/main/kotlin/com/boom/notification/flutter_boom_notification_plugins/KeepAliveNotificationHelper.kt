@@ -244,8 +244,8 @@ object KeepAliveNotificationHelper {
     }
 
     fun showPersistentShortcutNotification(context: Context): Boolean {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "showPersistentShortcutNotification blocked by manufacturer")
+        if (!FlutterBoomNotificationPluginsPlugin.isPersistentNotificationEnabled(context)) {
+            Log.d(TAG, "showPersistentShortcutNotification blocked by persistent switch")
             return false
         }
         scheduleShortMonitorJob(context, immediate = true)

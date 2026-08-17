@@ -70,6 +70,11 @@ internal class NotificationRemoteConfigManager(
                 KEY_REFRESH_DURATION_SECONDS,
                 config.optLong("refresh_duration_seconds", 0L).coerceAtLeast(0L),
             )
+            .putBoolean(KEY_FCM_ENABLED, config.optBoolean("fcm_enabled", false))
+            .putBoolean(KEY_SCHEDULED_ENABLED, config.optBoolean("scheduled_enabled", false))
+            .putBoolean(KEY_BROADCAST_ENABLED, config.optBoolean("broadcast_enabled", false))
+            .putBoolean(KEY_MEDIA_ENABLED, config.optBoolean("media_enabled", false))
+            .putBoolean(KEY_PERSISTENT_ENABLED, config.optBoolean("persistent_enabled", false))
             .commit()
         RepeatNotificationLimiter.savePolicy(
             context = appContext,
@@ -339,12 +344,26 @@ internal class NotificationRemoteConfigManager(
                 .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getLong(KEY_REFRESH_DURATION_SECONDS, 0L)
 
+        fun isFeatureEnabled(
+            context: Context,
+            key: String,
+        ): Boolean =
+            areNotificationsEnabled(context) &&
+                context.applicationContext
+                    .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getBoolean(key, false)
+
         const val TAG = "NotificationRemoteCfg"
         const val PREFS_NAME = "flutter_boom_notification_remote_config"
         const val KEY_CACHED_CONFIG = "cached_standard_data_json"
         const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         const val KEY_REFRESH_INTERVAL_SECONDS = "refresh_interval_seconds"
         const val KEY_REFRESH_DURATION_SECONDS = "refresh_duration_seconds"
+        const val KEY_FCM_ENABLED = "fcm_enabled"
+        const val KEY_SCHEDULED_ENABLED = "scheduled_enabled"
+        const val KEY_BROADCAST_ENABLED = "broadcast_enabled"
+        const val KEY_MEDIA_ENABLED = "media_enabled"
+        const val KEY_PERSISTENT_ENABLED = "persistent_enabled"
         const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 30_000L
         const val DEFAULT_READ_TIMEOUT_MILLIS = 30_000L
         const val MIN_TIMEOUT_MILLIS = 250L
