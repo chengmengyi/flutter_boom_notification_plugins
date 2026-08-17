@@ -2960,9 +2960,22 @@ class FlutterBoomNotificationPluginsPlugin :
             result.success(false)
             return
         }
-        val topic = call.argument<String>("topic")
-        if (topic.isNullOrEmpty()) {
-            result.error("invalid_topic", "Topic is required", null)
+        val topicArray = notificationRemoteConfigManager.currentConfig()?.optJSONArray("fcm_topic_arr")
+        val topics =
+            buildList {
+                if (topicArray != null) {
+                    for (index in 0 until topicArray.length()) {
+                        topicArray.optJSONObject(index)
+                            ?.optString("topic_name")
+                            ?.trim()
+                            ?.takeUnless { it.isBlank() }
+                            ?.let(::add)
+                    }
+                }
+            }.distinct()
+        if (topics.isEmpty()) {
+            Log.d(TAG, "subscribeToTopic skipped, fcm_topic_arr has no valid topic_name")
+            result.success(false)
             return
         }
         val details =
@@ -2991,8 +3004,28 @@ class FlutterBoomNotificationPluginsPlugin :
             channelDescription = channelDescription,
             importance = resolveImportance((details["importance"] as? Number)?.toInt() ?: 5),
         )
+        subscribeToConfiguredTopics(topics, result)
+    }
+
+    private fun subscribeToConfiguredTopics(
+        topics: List<String>,
+        result: Result,
+        index: Int = 0,
+        allSuccessful: Boolean = true,
+    ) {
+        if (index >= topics.size) {
+            result.success(allSuccessful)
+            return
+        }
+        val topic = topics[index]
         FirebaseMessaging.getInstance().subscribeToTopic(topic).addOnCompleteListener { task ->
-            result.success(task.isSuccessful)
+            Log.d(TAG, "subscribeToTopic topic=$topic success=${task.isSuccessful}")
+            subscribeToConfiguredTopics(
+                topics = topics,
+                result = result,
+                index = index + 1,
+                allSuccessful = allSuccessful && task.isSuccessful,
+            )
         }
     }
 

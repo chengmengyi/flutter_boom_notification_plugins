@@ -349,8 +349,7 @@ class FlutterBoomNotificationPlugins {
   }
 
   /// 订阅 FCM 主题并保存通知样式配置。
-  Future<bool> subscribeToTopic(
-    String topic, {
+  Future<bool> subscribeToTopic({
     String channelId = 'focus_channel_fcm',
     String channelName = 'focus_channel_name_fcm',
     String? channelDescription,
@@ -364,7 +363,6 @@ class FlutterBoomNotificationPlugins {
     String? beautyAppIcon,
   }) {
     return FlutterBoomNotificationPluginsPlatform.instance.subscribeToTopic(
-      topic: topic,
       channelId: channelId,
       channelName: channelName,
       channelDescription: channelDescription,

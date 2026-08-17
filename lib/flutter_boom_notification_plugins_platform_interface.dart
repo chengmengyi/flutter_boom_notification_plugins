@@ -258,7 +258,6 @@ abstract class FlutterBoomNotificationPluginsPlatform
 
   /// 订阅 FCM 主题并保存通知样式配置。
   Future<bool> subscribeToTopic({
-    required String topic,
     required String channelId,
     required String channelName,
     String? channelDescription,

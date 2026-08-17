@@ -335,7 +335,6 @@ class MethodChannelFlutterBoomNotificationPlugins
   /// 通过原生通道订阅 FCM 主题并保存配置。
   @override
   Future<bool> subscribeToTopic({
-    required String topic,
     required String channelId,
     required String channelName,
     String? channelDescription,
@@ -349,7 +348,6 @@ class MethodChannelFlutterBoomNotificationPlugins
     String? beautyAppIcon,
   }) async {
     final result = await methodChannel.invokeMethod<bool>('subscribeToTopic', {
-      'topic': topic,
       'channelId': channelId,
       'channelName': channelName,
       'channelDescription': channelDescription,

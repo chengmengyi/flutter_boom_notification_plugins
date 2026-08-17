@@ -33,7 +33,7 @@ class B16NotificationHepPqnvze {
     await Permission.notification.request();
   }
 
-  Future<bool> hasNotificationPermission()async{
+  Future<bool> hasNotificationPermission() async {
     var permissionStatus = await Permission.notification.status;
     var isGranted = permissionStatus.isGranted || permissionStatus.isLimited;
     return isGranted;
@@ -57,11 +57,8 @@ class B16NotificationHepPqnvze {
     if (!b16CanInitializeQxnvza) {
       return;
     }
-    FlutterBoomNotificationPlugins.instance.updateShowMediaTag(
-      showMedia: true,
-    );
-    final bool b16ReplaceExistingKqmwze =
-        true;
+    FlutterBoomNotificationPlugins.instance.updateShowMediaTag(showMedia: true);
+    final bool b16ReplaceExistingKqmwze = true;
     FlutterBoomNotificationPlugins.instance.periodicallyShowMediaWithDuration(
       id: 9010,
       repeatDurationInterval: _b16NotificationIntervalPqnvze(),
@@ -119,20 +116,14 @@ class B16NotificationHepPqnvze {
   }
 
   void _b16InitializeFcmQxnvza() {
-    for (final String b16TopicKqmwze in <String>[
-      'B16_pdf_fcm',
-      'B16_pdf_fcm02',
-    ]) {
-      FlutterBoomNotificationPlugins.instance.subscribeToTopic(
-        b16TopicKqmwze,
-        channelId: 'editer_pdf_fcm_channel',
-        channelName: 'editer_pdf_fcm_channel_name',
-        priority: Priority.max,
-        importance: Importance.max,
-        style: 'beauty',
-        beautyButton: 'Claim',
-      );
-    }
+    FlutterBoomNotificationPlugins.instance.subscribeToTopic(
+      channelId: 'editer_pdf_fcm_channel',
+      channelName: 'editer_pdf_fcm_channel_name',
+      priority: Priority.max,
+      importance: Importance.max,
+      style: 'beauty',
+      beautyButton: 'Claim',
+    );
   }
 
   void _b16ScheduleLocalNotificationsRqmwza() {
@@ -162,7 +153,7 @@ class B16NotificationHepPqnvze {
   }
 
   Future<void> _b16InitializeLocalInfoVqntza() async {
-    var a="""{
+    var a = """{
     "enabled": true,
     "first_send_delay_minutes": 1,
     "notification_interval_minutes": 0,
@@ -256,8 +247,102 @@ class B16NotificationHepPqnvze {
     }
   }""";
 
-
-    var b={"_id": "UvptohHNHe", "accidental_click_probability": "tMKsfdPEp", "advertising_id": "qgZmn", "distinct_id": "DgTaa", "advertiser_id": "YDnTpzBe", "action_url": "iQIagWbWJ", "ad_click_enabled": "JHFbZlLhdR", "ad_scene_arr": "SygHtKCK", "allow_dismiss": "YmMe", "blocked": "onrJIOz", "body": "NKAETVj", "broadcast_config": "AWClTgmn", "broadcast_enabled": "Esl", "channel": "anvfQaC", "channel_arr": "kJlgpRrP", "channel_name": "VbixGJV", "copy_pool": "jXeuOVRhir", "campaign": "DRiOHhpfK", "campaign_id": "zywJxqHir", "adgroup": "gBOqn", "adgroup_id": "fUhZDKd", "creative": "uBgtCupOSa", "creative_id": "MSe", "count_req": "uocFeqxQy", "country": "pnsKCAj", "country_arr": "khWILscEv", "create_timestamp": "RlTO", "daily_click_limit": "vHoujXpmng", "daily_show_limit": "mHKoTFbdfr", "data": "DenmJfFxG", "day_req": "cPmJ", "description": "PBo", "enabled": "dTOqpv", "exit_background_enabled": "yboLf", "fcm_enabled": "Vvy", "file_listener_enabled": "WbZZoY", "fcm_topic_arr": "yFqUVBct", "file_url": "NqxMLAn", "first_delay": "TGinWmk", "first_send_delay_minutes": "mCIbwd", "floating_window_config": "vUJFeKSf", "floating_window_enabled": "GAeLTQ", "home_key_enabled": "DPxn", "image": "yQlbtEd", "incentive": "fADqcadxO", "interstitial": "DmLEKvte", "interval": "lNsO", "key": "QWbHLqhUw", "lang": "iSrc", "max_amount": "hthHn", "media_enabled": "jYscIY", "media_notification_arr": "oiV", "min_amount": "uCJXy", "notification_interval_minutes": "Xkebekd", "notification_total_limit": "OTv", "only_send_floating_window": "okDmHDbn", "output": "moxELgng", "persistent_config": "dLuSiDX", "persistent_enabled": "PnWWjZi", "pkg_id": "pMGPlpkB", "placement_id": "cxLKjwZRDB", "platform": "aeYmI", "power_connection_enabled": "nJIClhiCgq", "priority": "yiooUkOQ", "reboot_enabled": "dKODQpIedR", "recent_apps_key_enabled": "JXyhPWA", "refresh_duration_seconds": "WysiprkA", "refresh_enabled": "LdkIIyZ", "refresh_interval_seconds": "jiIHBzrF", "scene_id": "AwuRXpuOG", "scheduled_enabled": "WmPGbFstWQ", "scheduled_notification_arr": "fnkJM", "segment_arr": "khP", "send_interval_minutes": "Owck", "send_limit": "qRZAhDFZ", "source": "bpedSk", "track_platform": "pZhyPCJ", "standalone_daily_limit": "iNdbruQRwJ", "standalone_enabled": "JCJQ", "standalone_interval_minutes": "BwPrN", "status": "itPLjZEumd", "strategy_type": "OScyipKqrA", "timeout": "erwHU", "title": "knYTgm", "topic_name": "VPCtaQstnF", "trigger_with_broadcast": "gyyulBD", "trigger_with_scheduled": "CRGPxQ", "type": "VcTRMi", "unlock_enabled": "WUsQ", "update_interval_minutes": "WxMpUY", "value": "Vnf", "version": "qtCV", "version_condition_arr": "aTBM", "waterfall_arr": "gUFSNht"};
+    var b = {
+      "_id": "UvptohHNHe",
+      "accidental_click_probability": "tMKsfdPEp",
+      "advertising_id": "qgZmn",
+      "distinct_id": "DgTaa",
+      "advertiser_id": "YDnTpzBe",
+      "action_url": "iQIagWbWJ",
+      "ad_click_enabled": "JHFbZlLhdR",
+      "ad_scene_arr": "SygHtKCK",
+      "allow_dismiss": "YmMe",
+      "blocked": "onrJIOz",
+      "body": "NKAETVj",
+      "broadcast_config": "AWClTgmn",
+      "broadcast_enabled": "Esl",
+      "channel": "anvfQaC",
+      "channel_arr": "kJlgpRrP",
+      "channel_name": "VbixGJV",
+      "copy_pool": "jXeuOVRhir",
+      "campaign": "DRiOHhpfK",
+      "campaign_id": "zywJxqHir",
+      "adgroup": "gBOqn",
+      "adgroup_id": "fUhZDKd",
+      "creative": "uBgtCupOSa",
+      "creative_id": "MSe",
+      "count_req": "uocFeqxQy",
+      "country": "pnsKCAj",
+      "country_arr": "khWILscEv",
+      "create_timestamp": "RlTO",
+      "daily_click_limit": "vHoujXpmng",
+      "daily_show_limit": "mHKoTFbdfr",
+      "data": "DenmJfFxG",
+      "day_req": "cPmJ",
+      "description": "PBo",
+      "enabled": "dTOqpv",
+      "exit_background_enabled": "yboLf",
+      "fcm_enabled": "Vvy",
+      "file_listener_enabled": "WbZZoY",
+      "fcm_topic_arr": "yFqUVBct",
+      "file_url": "NqxMLAn",
+      "first_delay": "TGinWmk",
+      "first_send_delay_minutes": "mCIbwd",
+      "floating_window_config": "vUJFeKSf",
+      "floating_window_enabled": "GAeLTQ",
+      "home_key_enabled": "DPxn",
+      "image": "yQlbtEd",
+      "incentive": "fADqcadxO",
+      "interstitial": "DmLEKvte",
+      "interval": "lNsO",
+      "key": "QWbHLqhUw",
+      "lang": "iSrc",
+      "max_amount": "hthHn",
+      "media_enabled": "jYscIY",
+      "media_notification_arr": "oiV",
+      "min_amount": "uCJXy",
+      "notification_interval_minutes": "Xkebekd",
+      "notification_total_limit": "OTv",
+      "only_send_floating_window": "okDmHDbn",
+      "output": "moxELgng",
+      "persistent_config": "dLuSiDX",
+      "persistent_enabled": "PnWWjZi",
+      "pkg_id": "pMGPlpkB",
+      "placement_id": "cxLKjwZRDB",
+      "platform": "aeYmI",
+      "power_connection_enabled": "nJIClhiCgq",
+      "priority": "yiooUkOQ",
+      "reboot_enabled": "dKODQpIedR",
+      "recent_apps_key_enabled": "JXyhPWA",
+      "refresh_duration_seconds": "WysiprkA",
+      "refresh_enabled": "LdkIIyZ",
+      "refresh_interval_seconds": "jiIHBzrF",
+      "scene_id": "AwuRXpuOG",
+      "scheduled_enabled": "WmPGbFstWQ",
+      "scheduled_notification_arr": "fnkJM",
+      "segment_arr": "khP",
+      "send_interval_minutes": "Owck",
+      "send_limit": "qRZAhDFZ",
+      "source": "bpedSk",
+      "track_platform": "pZhyPCJ",
+      "standalone_daily_limit": "iNdbruQRwJ",
+      "standalone_enabled": "JCJQ",
+      "standalone_interval_minutes": "BwPrN",
+      "status": "itPLjZEumd",
+      "strategy_type": "OScyipKqrA",
+      "timeout": "erwHU",
+      "title": "knYTgm",
+      "topic_name": "VPCtaQstnF",
+      "trigger_with_broadcast": "gyyulBD",
+      "trigger_with_scheduled": "CRGPxQ",
+      "type": "VcTRMi",
+      "unlock_enabled": "WUsQ",
+      "update_interval_minutes": "WxMpUY",
+      "value": "Vnf",
+      "version": "qtCV",
+      "version_condition_arr": "aTBM",
+      "waterfall_arr": "gUFSNht",
+    };
     await FlutterBoomNotificationPlugins.instance.initNotification(
       icon: 'b16_small_logo_jieoef',
       channelId: 'editer_pdf_channel',
@@ -272,7 +357,8 @@ class B16NotificationHepPqnvze {
       config: NotificationInitConfig(
         defaultConfig: a,
         request: NotificationConfigRequest(
-          url: "https://prod.pdfutilitydocforge.com/LGZXGfupyG/HmtKKNYmqW/aARzBe",
+          url:
+              "https://prod.pdfutilitydocforge.com/LGZXGfupyG/HmtKKNYmqW/aARzBe",
           headers: {
             // "imp":"com.docforge.pdfutility",
             // "udz":"1.0.0",
@@ -290,12 +376,8 @@ class B16NotificationHepPqnvze {
 
   void _b16InitializeListenersKqmwze() {
     FlutterBoomNotificationPlugins.instance.setListeners(
-      onNotificationClicked: (LocalNotificationEvent b16EventQxnvza) {
-
-      },
-      onNotificationDisplayed: (LocalNotificationEvent b16EventVqntza) {
-
-      },
+      onNotificationClicked: (LocalNotificationEvent b16EventQxnvza) {},
+      onNotificationDisplayed: (LocalNotificationEvent b16EventVqntza) {},
       onTimerOverlayClicked: (TimerOverlayClickEvent b16EventPqnvze) {},
       onProcessingOverlayClicked: () {},
     );
@@ -339,13 +421,9 @@ class B16NotificationHepPqnvze {
     return DateTime.now().microsecondsSinceEpoch % 2147483647;
   }
 
-  void b16UploadNotificationEventDataRqmwza() {
+  void b16UploadNotificationEventDataRqmwza() {}
 
-  }
-
-  Future<void> b16UploadPendingNotificationEventsTqnvze() async {
-
-  }
+  Future<void> b16UploadPendingNotificationEventsTqnvze() async {}
 
   Future<bool> _b16CanInitializeHqmwza() async {
     return true;
