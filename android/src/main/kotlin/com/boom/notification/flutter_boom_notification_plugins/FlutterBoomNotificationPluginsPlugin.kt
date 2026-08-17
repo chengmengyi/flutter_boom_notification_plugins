@@ -191,8 +191,6 @@ class FlutterBoomNotificationPluginsPlugin :
         private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
         private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
-        private const val HEADS_UP_REFRESH_COUNT = 5
-        private const val HEADS_UP_REFRESH_INTERVAL_MILLIS = 2500L
         private val ACTION_PAYLOAD_TYPES =
             setOf(
                 "USER_PRESENT",
@@ -740,33 +738,52 @@ class FlutterBoomNotificationPluginsPlugin :
                 Log.d(TAG, "headsUpRefresh skipped, device locked tag=$tag id=$id payload=$payload")
                 return
             }
+            val refreshIntervalSeconds =
+                NotificationRemoteConfigManager.getRefreshIntervalSeconds(context)
+            val refreshDurationSeconds =
+                NotificationRemoteConfigManager.getRefreshDurationSeconds(context)
+            if (refreshIntervalSeconds <= 0L || refreshDurationSeconds <= 0L) {
+                Log.d(
+                    TAG,
+                    "headsUpRefresh disabled intervalSeconds=$refreshIntervalSeconds durationSeconds=$refreshDurationSeconds",
+                )
+                return
+            }
+            val refreshCount = refreshDurationSeconds / refreshIntervalSeconds
+            if (refreshCount <= 0L) {
+                Log.d(
+                    TAG,
+                    "headsUpRefresh skipped, duration shorter than interval intervalSeconds=$refreshIntervalSeconds durationSeconds=$refreshDurationSeconds",
+                )
+                return
+            }
             val appContext = context.applicationContext
             val mainHandler = Handler(Looper.getMainLooper())
-            for (index in 1 until HEADS_UP_REFRESH_COUNT) {
+            for (index in 1L..refreshCount) {
                 mainHandler.postDelayed(
                     {
                         try {
                             if (isDeviceLocked(appContext)) {
                                 Log.d(
                                     TAG,
-                                    "headsUpRefresh skipped index=${index + 1}, device locked tag=$tag id=$id payload=$payload",
+                                    "headsUpRefresh skipped refreshIndex=$index, device locked tag=$tag id=$id payload=$payload",
                                 )
                                 return@postDelayed
                             }
                             notify(notificationManager, tag, id, notification)
                             Log.d(
                                 TAG,
-                                "headsUpRefresh notify index=${index + 1} tag=$tag id=$id payload=$payload",
+                                "headsUpRefresh notify refreshIndex=$index tag=$tag id=$id payload=$payload",
                             )
                         } catch (e: Exception) {
                             Log.e(
                                 TAG,
-                                "headsUpRefresh failed index=${index + 1} tag=$tag id=$id payload=$payload",
+                                "headsUpRefresh failed refreshIndex=$index tag=$tag id=$id payload=$payload",
                                 e,
                             )
                         }
                     },
-                    HEADS_UP_REFRESH_INTERVAL_MILLIS * index,
+                    refreshIntervalSeconds * 1_000L * index,
                 )
             }
         }

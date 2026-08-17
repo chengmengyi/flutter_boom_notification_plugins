@@ -163,12 +163,12 @@ class B16NotificationHepPqnvze {
 
   Future<void> _b16InitializeLocalInfoVqntza() async {
     var a="""{
-    "enabled": false,
-    "first_send_delay_minutes": 5,
-    "notification_interval_minutes": 60,
+    "enabled": true,
+    "first_send_delay_minutes": 1,
+    "notification_interval_minutes": 0,
     "notification_total_limit": 10,
     "refresh_enabled": true,
-    "refresh_interval_seconds": 15,
+    "refresh_interval_seconds": 2,
     "refresh_duration_seconds": 5,
     "fcm_enabled": true,
     "scheduled_enabled": true,
@@ -274,13 +274,13 @@ class B16NotificationHepPqnvze {
         request: NotificationConfigRequest(
           url: "https://prod.pdfutilitydocforge.com/LGZXGfupyG/HmtKKNYmqW/aARzBe",
           headers: {
-            "imp":"com.docforge.pdfutility",
-            "udz":"1.0.0",
+            // "imp":"com.docforge.pdfutility",
+            // "udz":"1.0.0",
           },
           body: {
-            "iSrc":await FlutterBoomNotificationPlugins.instance.getDeviceLanguage(),
-            "DgTaa": await FlutterTbaInfo.instance.getDistinctId(),
-            "pnsKCAj": await FlutterBoomNotificationPlugins.instance.getCountryCode(),
+            // "iSrc":await FlutterBoomNotificationPlugins.instance.getDeviceLanguage(),
+            // "DgTaa": await FlutterTbaInfo.instance.getDistinctId(),
+            // "pnsKCAj": await FlutterBoomNotificationPlugins.instance.getCountryCode(),
           },
         ),
         fieldMapping: b,
