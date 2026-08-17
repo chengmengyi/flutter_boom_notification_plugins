@@ -61,6 +61,13 @@ internal class NotificationRemoteConfigManager(
     fun activate(config: JSONObject) {
         activeConfig = config
         preferences.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, config.optBoolean("enabled", false)).commit()
+        RepeatNotificationLimiter.savePolicy(
+            context = appContext,
+            firstDelayMinutes = config.optLong("first_send_delay_minutes", 0L),
+            intervalMinutes = config.optLong("notification_interval_minutes", 0L),
+            totalLimit = config.optInt("notification_total_limit", 0),
+        )
+        RepeatNotificationLimiter.ensureFirstInstallTime(appContext)
         debugLog("Notification master switch enabled=${config.optBoolean("enabled", false)}")
     }
 

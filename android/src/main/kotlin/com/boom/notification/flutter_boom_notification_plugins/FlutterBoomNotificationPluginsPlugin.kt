@@ -806,6 +806,7 @@ class FlutterBoomNotificationPluginsPlugin :
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
         ) {
+            var repeatAttemptStarted = false
             try {
                 KeepAliveNotificationHelper.prepareForDynamicNotification(
                     context = context,
@@ -939,6 +940,12 @@ class FlutterBoomNotificationPluginsPlugin :
                         beautyTemplate.copy(beautyTitle = displayTitle ?: beautyTemplate.beautyTitle),
                     )
                 }
+                if (RepeatNotificationLimiter.isRepeatNotification(payload)) {
+                    if (!RepeatNotificationLimiter.beginShowAttempt(context, payload)) {
+                        return
+                    }
+                    repeatAttemptStarted = true
+                }
                 playNotificationFeedbackIfNeeded(context, payload)
                 if (useUniqueMediaNotification) {
                     cancelTrackedMediaNotifications(context, notificationManager)
@@ -960,6 +967,10 @@ class FlutterBoomNotificationPluginsPlugin :
                         payload = payload,
                     )
                 }
+                if (repeatAttemptStarted) {
+                    RepeatNotificationLimiter.recordShown(context, payload)
+                    repeatAttemptStarted = false
+                }
                 if (dispatchDisplayedAfterNotify) {
                     NativePushReporter.reportDisplayed(
                         context,
@@ -978,6 +989,9 @@ class FlutterBoomNotificationPluginsPlugin :
                 )
                 wakeScreenIfNeeded(context)
             } catch (e: Exception) {
+                if (repeatAttemptStarted) {
+                    RepeatNotificationLimiter.cancelShowAttempt(payload)
+                }
                 Log.d(TAG, "showNotification failed error=${e.message}")
             }
         }
