@@ -345,13 +345,24 @@ class FlutterBoomNotificationPluginsPlugin :
         }
 
         fun isKoreanLocale(context: Context): Boolean {
+            return isKoreanLocale(currentLocale(context))
+        }
+
+        fun getDeviceLanguage(context: Context): String {
+            return currentLocale(context).language.orEmpty().lowercase(Locale.US)
+        }
+
+        fun getCountryCode(context: Context): String {
+            return currentLocale(context).country.orEmpty().uppercase(Locale.US)
+        }
+
+        private fun currentLocale(context: Context): Locale {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val localeList = context.resources.configuration.locales
-                if (!localeList.isEmpty) {
-                    return isKoreanLocale(localeList[0])
-                }
+                if (!localeList.isEmpty) return localeList[0]
             }
-            return isKoreanLocale(Locale.getDefault())
+            @Suppress("DEPRECATION")
+            return context.resources.configuration.locale ?: Locale.getDefault()
         }
 
         private fun isKoreanLocale(locale: Locale?): Boolean {
@@ -2141,6 +2152,7 @@ class FlutterBoomNotificationPluginsPlugin :
 
     private lateinit var channel: MethodChannel
     private lateinit var applicationContext: Context
+    private lateinit var notificationRemoteConfigManager: NotificationRemoteConfigManager
     private var activityBinding: ActivityPluginBinding? = null
     private var activity: Activity? = null
     private var pendingOverlayPermissionResult: Result? = null
@@ -2151,6 +2163,7 @@ class FlutterBoomNotificationPluginsPlugin :
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
+        notificationRemoteConfigManager = NotificationRemoteConfigManager(applicationContext)
         InProcessTimerManager.start(applicationContext)
         registerHostActivityLifecycleCallbacks()
         channel =
@@ -2172,6 +2185,8 @@ class FlutterBoomNotificationPluginsPlugin :
                 "configureBlockedManufacturers",
                 "isSamsungDevice",
                 "isKoreanLocale",
+                "getDeviceLanguage",
+                "getCountryCode",
                 "getPlatformVersion",
                 "consumeDisplayedNotificationCount",
                 "configureNativePushReporting",
@@ -2246,6 +2261,8 @@ class FlutterBoomNotificationPluginsPlugin :
             "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "isKoreanLocale" -> result.success(isKoreanLocale(applicationContext))
+            "getDeviceLanguage" -> result.success(getDeviceLanguage(applicationContext))
+            "getCountryCode" -> result.success(getCountryCode(applicationContext))
             "checkOverlayPermission" -> result.success(hasOverlayPermission(applicationContext))
             "requestOverlayPermission" -> requestOverlayPermission(call, result)
             "showProcessingOverlay" -> showProcessingOverlay(call, result)
@@ -2683,6 +2700,22 @@ class FlutterBoomNotificationPluginsPlugin :
             result.success(false)
             return
         }
+        val notificationInitConfig = call.argument<Map<String, Any?>>("config")
+        if (notificationInitConfig == null) {
+            result.error("invalid_config", "NotificationInitConfig is required", null)
+            return
+        }
+        val initialNotificationConfig =
+            notificationRemoteConfigManager.resolveInitialConfig(notificationInitConfig)
+        if (initialNotificationConfig == null) {
+            result.error(
+                "invalid_default_config",
+                "No valid local config and defaultConfig is not a JSON object",
+                null,
+            )
+            return
+        }
+        notificationRemoteConfigManager.activate(initialNotificationConfig)
         channelId = call.argument<String>("channelId") ?: DEFAULT_CHANNEL_ID
         channelName = call.argument<String>("channelName") ?: DEFAULT_CHANNEL_NAME
         channelDescription =
@@ -2714,6 +2747,10 @@ class FlutterBoomNotificationPluginsPlugin :
         )
         KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
         KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        notificationRemoteConfigManager.refreshInBackground(notificationInitConfig) {
+            // 远程配置已完成解析、字段还原和持久化。后续通知任务读取当前配置时
+            // 将得到新配置；远程失败不会进入此回调，也不会影响本次初始化。
+        }
         result.success(true)
     }
 
@@ -3038,6 +3075,7 @@ class FlutterBoomNotificationPluginsPlugin :
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        notificationRemoteConfigManager.close()
         notificationEventChannel = null
         channel.setMethodCallHandler(null)
         unregisterHostActivityLifecycleCallbacks()

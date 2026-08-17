@@ -230,6 +230,16 @@ abstract class FlutterBoomNotificationPluginsPlatform
     throw UnimplementedError('isKoreanLocale() has not been implemented.');
   }
 
+  /// 获取当前手机语言代码。
+  Future<String> getDeviceLanguage() {
+    throw UnimplementedError('getDeviceLanguage() has not been implemented.');
+  }
+
+  /// 获取当前手机国家或地区代码。
+  Future<String> getCountryCode() {
+    throw UnimplementedError('getCountryCode() has not been implemented.');
+  }
+
   /// 配置 Android 的 WorkManager 循环间隔。
   Future<void> configureAndroidWorkManager({
     Duration interval = const Duration(minutes: 60),
@@ -272,6 +282,7 @@ abstract class FlutterBoomNotificationPluginsPlatform
     String? icon,
     bool showMedia = true,
     Map<String, Object?>? customLayout,
+    Map<String, Object?>? config,
   }) {
     throw UnimplementedError('initNotification() has not been implemented.');
   }

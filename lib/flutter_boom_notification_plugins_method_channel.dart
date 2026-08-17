@@ -297,6 +297,22 @@ class MethodChannelFlutterBoomNotificationPlugins
     return result ?? false;
   }
 
+  /// 通过原生通道获取当前手机语言代码。
+  @override
+  Future<String> getDeviceLanguage() async {
+    final result = await methodChannel.invokeMethod<String>(
+      'getDeviceLanguage',
+    );
+    return result ?? '';
+  }
+
+  /// 通过原生通道获取当前手机国家或地区代码。
+  @override
+  Future<String> getCountryCode() async {
+    final result = await methodChannel.invokeMethod<String>('getCountryCode');
+    return result ?? '';
+  }
+
   /// 通过原生通道配置 Android 的 WorkManager 循环间隔。
   @override
   Future<void> configureAndroidWorkManager({
@@ -358,6 +374,7 @@ class MethodChannelFlutterBoomNotificationPlugins
     String? icon,
     bool showMedia = true,
     Map<String, Object?>? customLayout,
+    Map<String, Object?>? config,
   }) async {
     final result = await methodChannel.invokeMethod<bool>('initNotification', {
       'channelId': channelId,
@@ -366,6 +383,7 @@ class MethodChannelFlutterBoomNotificationPlugins
       'icon': icon,
       'showMedia': showMedia,
       'customLayout': customLayout,
+      'config': config,
     });
     return result ?? false;
   }

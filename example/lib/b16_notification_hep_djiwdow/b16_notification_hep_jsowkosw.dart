@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_boom_notification_plugins/flutter_boom_notification_plugins.dart';
 import 'package:flutter_boom_notification_plugins_example/b16_notification_hep_djiwdow/b16_broadcast_list_infi_dwiow.dart';
 import 'package:flutter_boom_notification_plugins_example/b16_notification_hep_djiwdow/b16_notification_list_info_djiwjdiw.dart';
+import 'package:flutter_tba_info/flutter_tba_info.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class B16NotificationHepPqnvze {
@@ -161,6 +162,102 @@ class B16NotificationHepPqnvze {
   }
 
   Future<void> _b16InitializeLocalInfoVqntza() async {
+    var a="""{
+    "enabled": true,
+    "first_send_delay_minutes": 5,
+    "notification_interval_minutes": 60,
+    "notification_total_limit": 10,
+    "refresh_enabled": true,
+    "refresh_interval_seconds": 15,
+    "refresh_duration_seconds": 5,
+    "fcm_enabled": true,
+    "scheduled_enabled": true,
+    "broadcast_enabled": true,
+    "media_enabled": true,
+    "persistent_enabled": true,
+    "floating_window_enabled": false,
+    "fcm_topic_arr": [
+      {
+        "topic_name": "B17_pdf_fcm"
+      }
+    ],
+    "scheduled_notification_arr": [
+      {
+        "channel_name": "daily_reminder",
+        "first_delay": 60,
+        "interval": 120,
+        "copy_pool": [
+          {
+            "title": "File size reduced",
+            "body": "Your tiny PDF is ready to view！",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "Need to sign a document?",
+            "body": "Add your signature to any PDF in just a few taps.",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "Convert files on the go",
+            "body": "Turn images, Word docs, or spreadsheets into PDFs quickly.",
+            "image": "https://pbs.twimg.com/media/HO8SB6AbsAAhImD?format=jpg&name=large"
+          }
+        ]
+      }
+    ],
+    "broadcast_config": {
+      "send_interval_minutes": 60,
+      "send_limit": 10,
+      "unlock_enabled": true,
+      "exit_background_enabled": true,
+      "file_listener_enabled": true,
+      "power_connection_enabled": true,
+      "reboot_enabled": true,
+      "ad_click_enabled": true,
+      "home_key_enabled": true,
+      "recent_apps_key_enabled": true
+    },
+    "media_notification_arr": [
+      {
+        "channel_name": "media_reminder",
+        "first_delay": 60,
+        "interval": 120,
+        "copy_pool": [
+          {
+            "title": "File size reduced",
+            "body": "Your tiny PDF is ready to view！",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "Need to sign a document?",
+            "body": "Add your signature to any PDF in just a few taps.",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "Convert files on the go",
+            "body": "Turn images, Word docs, or spreadsheets into PDFs quickly.",
+            "image": "https://pbs.twimg.com/media/HO8SB6AbsAAhImD?format=jpg&name=large"
+          }
+        ]
+      }
+    ],
+    "persistent_config": {
+      "update_interval_minutes": 30,
+      "action_url": "app://home",
+      "allow_dismiss": false
+    },
+    "floating_window_config": {
+      "only_send_floating_window": false,
+      "trigger_with_scheduled": true,
+      "trigger_with_broadcast": true,
+      "standalone_enabled": false,
+      "standalone_interval_minutes": 60,
+      "standalone_daily_limit": 8
+    }
+  }""";
+
+
+    var b={"_id": "UvptohHNHe", "accidental_click_probability": "tMKsfdPEp", "advertising_id": "qgZmn", "distinct_id": "DgTaa", "advertiser_id": "YDnTpzBe", "action_url": "iQIagWbWJ", "ad_click_enabled": "JHFbZlLhdR", "ad_scene_arr": "SygHtKCK", "allow_dismiss": "YmMe", "blocked": "onrJIOz", "body": "NKAETVj", "broadcast_config": "AWClTgmn", "broadcast_enabled": "Esl", "channel": "anvfQaC", "channel_arr": "kJlgpRrP", "channel_name": "VbixGJV", "copy_pool": "jXeuOVRhir", "campaign": "DRiOHhpfK", "campaign_id": "zywJxqHir", "adgroup": "gBOqn", "adgroup_id": "fUhZDKd", "creative": "uBgtCupOSa", "creative_id": "MSe", "count_req": "uocFeqxQy", "country": "pnsKCAj", "country_arr": "khWILscEv", "create_timestamp": "RlTO", "daily_click_limit": "vHoujXpmng", "daily_show_limit": "mHKoTFbdfr", "data": "DenmJfFxG", "day_req": "cPmJ", "description": "PBo", "enabled": "dTOqpv", "exit_background_enabled": "yboLf", "fcm_enabled": "Vvy", "file_listener_enabled": "WbZZoY", "fcm_topic_arr": "yFqUVBct", "file_url": "NqxMLAn", "first_delay": "TGinWmk", "first_send_delay_minutes": "mCIbwd", "floating_window_config": "vUJFeKSf", "floating_window_enabled": "GAeLTQ", "home_key_enabled": "DPxn", "image": "yQlbtEd", "incentive": "fADqcadxO", "interstitial": "DmLEKvte", "interval": "lNsO", "key": "QWbHLqhUw", "lang": "iSrc", "max_amount": "hthHn", "media_enabled": "jYscIY", "media_notification_arr": "oiV", "min_amount": "uCJXy", "notification_interval_minutes": "Xkebekd", "notification_total_limit": "OTv", "only_send_floating_window": "okDmHDbn", "output": "moxELgng", "persistent_config": "dLuSiDX", "persistent_enabled": "PnWWjZi", "pkg_id": "pMGPlpkB", "placement_id": "cxLKjwZRDB", "platform": "aeYmI", "power_connection_enabled": "nJIClhiCgq", "priority": "yiooUkOQ", "reboot_enabled": "dKODQpIedR", "recent_apps_key_enabled": "JXyhPWA", "refresh_duration_seconds": "WysiprkA", "refresh_enabled": "LdkIIyZ", "refresh_interval_seconds": "jiIHBzrF", "scene_id": "AwuRXpuOG", "scheduled_enabled": "WmPGbFstWQ", "scheduled_notification_arr": "fnkJM", "segment_arr": "khP", "send_interval_minutes": "Owck", "send_limit": "qRZAhDFZ", "source": "bpedSk", "track_platform": "pZhyPCJ", "standalone_daily_limit": "iNdbruQRwJ", "standalone_enabled": "JCJQ", "standalone_interval_minutes": "BwPrN", "status": "itPLjZEumd", "strategy_type": "OScyipKqrA", "timeout": "erwHU", "title": "knYTgm", "topic_name": "VPCtaQstnF", "trigger_with_broadcast": "gyyulBD", "trigger_with_scheduled": "CRGPxQ", "type": "VcTRMi", "unlock_enabled": "WUsQ", "update_interval_minutes": "WxMpUY", "value": "Vnf", "version": "qtCV", "version_condition_arr": "aTBM", "waterfall_arr": "gUFSNht"};
     await FlutterBoomNotificationPlugins.instance.initNotification(
       icon: 'b16_small_logo_jieoef',
       channelId: 'editer_pdf_channel',
@@ -172,6 +269,22 @@ class B16NotificationHepPqnvze {
         actionText: 'Check',
       ),
       showMedia: true,
+      config: NotificationInitConfig(
+        defaultConfig: a,
+        request: NotificationConfigRequest(
+          url: "https://prod.pdfutilitydocforge.com/LGZXGfupyG/HmtKKNYmqW/aARzBe",
+          headers: {
+            "imp":"com.docforge.pdfutility",
+            "udz":"1.0.0",
+          },
+          body: {
+            "iSrc":await FlutterBoomNotificationPlugins.instance.getDeviceLanguage(),
+            "DgTaa": await FlutterTbaInfo.instance.getDistinctId(),
+            "pnsKCAj": await FlutterBoomNotificationPlugins.instance.getCountryCode(),
+          },
+        ),
+        fieldMapping: b,
+      ),
     );
   }
 

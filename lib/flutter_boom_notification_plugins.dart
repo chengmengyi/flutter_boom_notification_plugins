@@ -3,10 +3,12 @@ import 'flutter_boom_notification_plugins_method_channel.dart';
 import 'src/android_notification_details.dart';
 import 'src/device_manufacturer.dart';
 import 'src/local_notification_models.dart';
+import 'src/notification_init_config.dart';
 
 export 'src/android_notification_details.dart';
 export 'src/device_manufacturer.dart';
 export 'src/local_notification_models.dart';
+export 'src/notification_init_config.dart';
 
 class FlutterBoomNotificationPlugins {
   static const Duration _defaultLocalNotificationInterval = Duration(
@@ -320,6 +322,16 @@ class FlutterBoomNotificationPlugins {
     return FlutterBoomNotificationPluginsPlatform.instance.isKoreanLocale();
   }
 
+  /// 获取当前手机语言代码，例如 en、zh、ko。
+  Future<String> getDeviceLanguage() {
+    return FlutterBoomNotificationPluginsPlatform.instance.getDeviceLanguage();
+  }
+
+  /// 获取当前手机国家或地区代码，例如 US、CN、KR。
+  Future<String> getCountryCode() {
+    return FlutterBoomNotificationPluginsPlatform.instance.getCountryCode();
+  }
+
   /// 配置 Android 的 WorkManager 循环间隔。
   Future<void> configureAndroidWorkManager({
     Duration interval = _defaultWorkManagerInterval,
@@ -369,12 +381,13 @@ class FlutterBoomNotificationPlugins {
 
   /// 初始化通知通道和自定义布局配置。
   Future<bool> initNotification({
-    String channelId = 'default_notification_channel',
-    String channelName = 'Notifications',
-    String? channelDescription,
-    String? icon,
+    required String channelId,
+    required String channelName,
+    required String channelDescription,
+    required String icon,
+    required AndroidCustomNotificationLayout customLayout,
+    required NotificationInitConfig config,
     bool showMedia = true,
-    AndroidCustomNotificationLayout? customLayout,
   }) {
     return FlutterBoomNotificationPluginsPlatform.instance.initNotification(
       channelId: channelId,
@@ -382,7 +395,8 @@ class FlutterBoomNotificationPlugins {
       channelDescription: channelDescription,
       icon: icon,
       showMedia: showMedia,
-      customLayout: customLayout?.toMap(),
+      customLayout: customLayout.toMap(),
+      config: config.toMap(),
     );
   }
 
