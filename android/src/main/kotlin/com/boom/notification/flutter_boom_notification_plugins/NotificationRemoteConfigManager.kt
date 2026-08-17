@@ -2,6 +2,8 @@ package com.boom.notification.flutter_boom_notification_plugins
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +24,7 @@ internal class NotificationRemoteConfigManager(
 ) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val preferences =
         appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val isDebuggable =
@@ -57,34 +60,59 @@ internal class NotificationRemoteConfigManager(
 
     fun activate(config: JSONObject) {
         activeConfig = config
+        preferences.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, config.optBoolean("enabled", false)).commit()
+        debugLog("Notification master switch enabled=${config.optBoolean("enabled", false)}")
     }
 
     fun currentConfig(): JSONObject? = activeConfig
 
-    fun refreshInBackground(
+    /**
+     * 远程配置优先，失败时使用有效本地缓存，本地无效时使用 defaultConfig。
+     * 回调一定在主线程执行，调用方可在回调完成通知初始化后再回复 MethodChannel。
+     */
+    fun resolveForInitialization(
         config: Map<*, *>,
-        onRemoteConfigUpdated: (JSONObject) -> Unit,
+        onResolved: (JSONObject) -> Unit,
+        onFailure: () -> Unit,
     ) {
-        if (config["request"] !is Map<*, *>) return
         scope.launch {
-            try {
-                val remoteConfig = requestAndParse(config)
-                preferences.edit().putString(KEY_CACHED_CONFIG, remoteConfig.toString()).apply()
-                debugLog("Remote config saved to local cache\n$remoteConfig")
-                activate(remoteConfig)
-                onRemoteConfigUpdated(remoteConfig)
-            } catch (error: Exception) {
-                // 远程配置是增强能力；任何请求、状态、JSON、提取或映射异常都保持当前配置。
-                if (isDebuggable) {
-                    Log.e(
-                        TAG,
-                        "Remote notification config failed; keeping local/default config",
-                        error,
-                    )
+            val fallbackConfig = resolveInitialConfig(config)
+            val requestAvailable = config["request"] is Map<*, *>
+            val resolvedConfig =
+                if (!requestAvailable) {
+                    fallbackConfig
                 } else {
-                    Log.w(TAG, "Remote notification config unavailable; keeping local/default config")
+                    try {
+                        val remoteConfig = requestAndParse(config)
+                        preferences.edit().putString(KEY_CACHED_CONFIG, remoteConfig.toString()).apply()
+                        debugLog("Remote config saved to local cache\n$remoteConfig")
+                        remoteConfig
+                    } catch (error: Exception) {
+                        logRemoteFailure(error)
+                        fallbackConfig
+                    }
+                }
+            mainHandler.post {
+                if (resolvedConfig == null) {
+                    onFailure()
+                } else {
+                    activate(resolvedConfig)
+                    onResolved(resolvedConfig)
                 }
             }
+        }
+    }
+
+    private fun logRemoteFailure(error: Exception) {
+        // 远程配置是增强能力；任何请求、状态、JSON、提取或映射异常均进入本地/default 兜底。
+        if (isDebuggable) {
+            Log.e(
+                TAG,
+                "Remote notification config failed; using local/default config",
+                error,
+            )
+        } else {
+            Log.w(TAG, "Remote notification config unavailable; using local/default config")
         }
     }
 
@@ -278,16 +306,23 @@ internal class NotificationRemoteConfigManager(
         }
     }
 
-    private companion object {
+    companion object {
+        fun areNotificationsEnabled(context: Context): Boolean =
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_NOTIFICATIONS_ENABLED, false)
+
         const val TAG = "NotificationRemoteCfg"
         const val PREFS_NAME = "flutter_boom_notification_remote_config"
         const val KEY_CACHED_CONFIG = "cached_standard_data_json"
-        const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 3_000L
-        const val DEFAULT_READ_TIMEOUT_MILLIS = 5_000L
+        const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 30_000L
+        const val DEFAULT_READ_TIMEOUT_MILLIS = 30_000L
         const val MIN_TIMEOUT_MILLIS = 250L
         const val MAX_TIMEOUT_MILLIS = 30_000L
         const val LOG_CHUNK_SIZE = 3_500
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         val EMPTY_REQUEST_BODY = ByteArray(0).toRequestBody(null)
     }
+
 }

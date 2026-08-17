@@ -333,7 +333,7 @@ class FlutterBoomNotificationPluginsPlugin :
         }
 
         fun isNotificationBlocked(context: Context): Boolean {
-            return false
+            return !NotificationRemoteConfigManager.areNotificationsEnabled(context)
         }
 
         fun canPostNotifications(context: Context): Boolean {
@@ -2161,10 +2161,18 @@ class FlutterBoomNotificationPluginsPlugin :
     private var channelDescription: String = DEFAULT_CHANNEL_DESCRIPTION
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
+    private data class NotificationBaseInitArgs(
+        val channelId: String,
+        val channelName: String,
+        val channelDescription: String,
+        val iconName: String?,
+        val showMedia: Boolean,
+        val customLayout: Map<String, Any?>?,
+    )
+
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
         notificationRemoteConfigManager = NotificationRemoteConfigManager(applicationContext)
-        InProcessTimerManager.start(applicationContext)
         registerHostActivityLifecycleCallbacks()
         channel =
             MethodChannel(
@@ -2173,14 +2181,13 @@ class FlutterBoomNotificationPluginsPlugin :
             )
         channel.setMethodCallHandler(this)
         notificationEventChannel = channel
-        registerUnlockReceiverIfNeeded()
     }
 
     override fun onMethodCall(
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
+        if (isNotificationBlocked(applicationContext) && call.method != "initNotification") {
             when (call.method) {
                 "configureBlockedManufacturers",
                 "isSamsungDevice",
@@ -2696,30 +2703,55 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(false)
-            return
-        }
         val notificationInitConfig = call.argument<Map<String, Any?>>("config")
         if (notificationInitConfig == null) {
             result.error("invalid_config", "NotificationInitConfig is required", null)
             return
         }
-        val initialNotificationConfig =
-            notificationRemoteConfigManager.resolveInitialConfig(notificationInitConfig)
-        if (initialNotificationConfig == null) {
-            result.error(
-                "invalid_default_config",
-                "No valid local config and defaultConfig is not a JSON object",
-                null,
+        val baseInitArgs =
+            NotificationBaseInitArgs(
+                channelId = call.argument<String>("channelId") ?: DEFAULT_CHANNEL_ID,
+                channelName = call.argument<String>("channelName") ?: DEFAULT_CHANNEL_NAME,
+                channelDescription =
+                    call.argument<String>("channelDescription") ?: DEFAULT_CHANNEL_DESCRIPTION,
+                iconName = call.argument<String>("icon"),
+                showMedia = call.argument<Boolean>("showMedia") ?: true,
+                customLayout = call.argument<Map<String, Any?>>("customLayout"),
             )
+        notificationRemoteConfigManager.resolveForInitialization(
+            config = notificationInitConfig,
+            onResolved = { resolvedConfig ->
+                applyNotificationMasterSwitch(
+                    enabled = resolvedConfig.optBoolean("enabled", false),
+                    args = baseInitArgs,
+                )
+                result.success(true)
+            },
+            onFailure = {
+                result.error(
+                    "invalid_default_config",
+                    "Remote request failed and neither local config nor defaultConfig is a valid JSON object",
+                    null,
+                )
+            },
+        )
+    }
+
+    private fun applyNotificationMasterSwitch(
+        enabled: Boolean,
+        args: NotificationBaseInitArgs,
+    ) {
+        if (!enabled) {
+            ProcessingOverlayService.close(applicationContext)
+            TimerOverlayHelper.cancel(applicationContext)
+            GalleryImageObserverHelper.stop(applicationContext)
+            BroadcastNotificationReceiverManager.disable(applicationContext)
+            KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
             return
         }
-        notificationRemoteConfigManager.activate(initialNotificationConfig)
-        channelId = call.argument<String>("channelId") ?: DEFAULT_CHANNEL_ID
-        channelName = call.argument<String>("channelName") ?: DEFAULT_CHANNEL_NAME
-        channelDescription =
-            call.argument<String>("channelDescription") ?: DEFAULT_CHANNEL_DESCRIPTION
+        channelId = args.channelId
+        channelName = args.channelName
+        channelDescription = args.channelDescription
         ensureNotificationChannel(
             context = applicationContext,
             channelId = channelId,
@@ -2728,30 +2760,27 @@ class FlutterBoomNotificationPluginsPlugin :
         )
         CustomNotificationLayoutHelper.saveConfig(
             context = applicationContext,
-            configMap = call.argument<Map<String, Any?>>("customLayout"),
+            configMap = args.customLayout,
         )
         saveShowMediaTag(
             applicationContext,
-            call.argument<Boolean>("showMedia") ?: true,
+            args.showMedia,
         )
         saveChannelConfig(
             context = applicationContext,
             channelId = channelId,
             channelName = channelName,
             channelDescription = channelDescription,
-            iconName = call.argument<String>("icon"),
+            iconName = args.iconName,
         )
+        InProcessTimerManager.start(applicationContext)
+        registerUnlockReceiverIfNeeded()
         KeepAliveNotificationHelper.scheduleShortMonitorJob(
             applicationContext,
             immediate = false,
         )
         KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
         KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
-        notificationRemoteConfigManager.refreshInBackground(notificationInitConfig) {
-            // 远程配置已完成解析、字段还原和持久化。后续通知任务读取当前配置时
-            // 将得到新配置；远程失败不会进入此回调，也不会影响本次初始化。
-        }
-        result.success(true)
     }
 
     private fun configureAndroidWorkManager(

@@ -163,7 +163,7 @@ class B16NotificationHepPqnvze {
 
   Future<void> _b16InitializeLocalInfoVqntza() async {
     var a="""{
-    "enabled": true,
+    "enabled": false,
     "first_send_delay_minutes": 5,
     "notification_interval_minutes": 60,
     "notification_total_limit": 10,

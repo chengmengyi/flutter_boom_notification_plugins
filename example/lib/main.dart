@@ -66,13 +66,13 @@ class _MyAppState extends State<MyApp> {
                 },
                 child: Text('初始化通知'),
               ),
-              SizedBox(height: 20,),
-              InkWell(
-                onTap: (){
-                  _requestConfig();
-                },
-                child: Text('获取配置'),
-              ),
+              // SizedBox(height: 20,),
+              // InkWell(
+              //   onTap: (){
+              //     _requestConfig();
+              //   },
+              //   child: Text('获取配置'),
+              // ),
             ],
           ),
         ),
