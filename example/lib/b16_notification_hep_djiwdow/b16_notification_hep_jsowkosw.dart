@@ -108,11 +108,7 @@ class B16NotificationHepPqnvze {
   }
 
   void _b16InitializeBroadcastsVqntza() {
-    FlutterBoomNotificationPlugins.instance.registerBroadcastNotifications(
-      notificationList:
-          B16NotificationContentHepHqmwza.b16BuildContentsKqmwze(),
-      configList: B16BroadcastConfigHepVqntza.b16BuildConfigsKqmwze(),
-    );
+    FlutterBoomNotificationPlugins.instance.registerBroadcastNotifications();
   }
 
   void _b16InitializeFcmQxnvza() {
@@ -127,23 +123,11 @@ class B16NotificationHepPqnvze {
   }
 
   void _b16ScheduleLocalNotificationsRqmwza() {
-    FlutterBoomNotificationPlugins.instance.periodicallyShowLocalWithDuration(
-      id: 9009,
-      repeatDurationInterval: _b16NotificationIntervalPqnvze(),
-      notificationDetails: AndroidNotificationDetails(
-        'editer_pdf_local_channel',
-        'editer_pdf_local_channel_name',
-        channelDescription: 'Editer PDF local notifications',
-        priority: Priority.max,
-        importance: Importance.max,
-      ),
-      notificationList:
-          B16NotificationContentHepHqmwza.b16BuildContentsKqmwze(),
-    );
+    FlutterBoomNotificationPlugins.instance.periodicallyShowLocalWithDuration();
   }
 
   Duration _b16NotificationIntervalPqnvze() {
-    return Duration(seconds: 30);
+    return const Duration(seconds: 30);
   }
 
   void b16UpdateNewFileTextPqnvze() {
@@ -174,22 +158,44 @@ class B16NotificationHepPqnvze {
     ],
     "scheduled_notification_arr": [
       {
-        "channel_name": "daily_reminder",
-        "first_delay": 60,
-        "interval": 120,
+        "channel_name": "daily_reminder1",
+        "first_delay": 1,
+        "interval": 1,
         "copy_pool": [
           {
-            "title": "File size reduced",
+            "title": "111File size reduced",
             "body": "Your tiny PDF is ready to view！",
             "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
           },
           {
-            "title": "Need to sign a document?",
+            "title": "111Need to sign a document?",
             "body": "Add your signature to any PDF in just a few taps.",
             "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
           },
           {
-            "title": "Convert files on the go",
+            "title": "111Convert files on the go",
+            "body": "Turn images, Word docs, or spreadsheets into PDFs quickly.",
+            "image": "https://pbs.twimg.com/media/HO8SB6AbsAAhImD?format=jpg&name=large"
+          }
+        ]
+      },
+      {
+        "channel_name": "daily_reminder2",
+        "first_delay": 1,
+        "interval": 2,
+        "copy_pool": [
+          {
+            "title": "222File size reduced",
+            "body": "Your tiny PDF is ready to view！",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "222Need to sign a document?",
+            "body": "Add your signature to any PDF in just a few taps.",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "222Convert files on the go",
             "body": "Turn images, Word docs, or spreadsheets into PDFs quickly.",
             "image": "https://pbs.twimg.com/media/HO8SB6AbsAAhImD?format=jpg&name=large"
           }
@@ -197,8 +203,8 @@ class B16NotificationHepPqnvze {
       }
     ],
     "broadcast_config": {
-      "send_interval_minutes": 60,
-      "send_limit": 10,
+      "send_interval_minutes": 0,
+      "send_limit": 100,
       "unlock_enabled": true,
       "exit_background_enabled": true,
       "file_listener_enabled": true,

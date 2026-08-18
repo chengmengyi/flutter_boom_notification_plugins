@@ -41,7 +41,10 @@ object LocalNotificationScheduler {
     )
 
     fun register(context: Context, sourceIntent: Intent) {
-        val id = sourceIntent.getIntExtra("id", 0)
+        val id = sourceIntent.getIntExtra(
+            "localScheduleId",
+            sourceIntent.getIntExtra("id", 0),
+        )
         val interval = sourceIntent.getLongExtra("repeatIntervalMilliseconds", 0L)
         if (id == 0 || interval <= 0L) return
         val appContext = context.applicationContext
@@ -51,9 +54,7 @@ object LocalNotificationScheduler {
         val scheduleResult = synchronized(lock) {
             val schedules = readSchedules(appContext)
             val old = schedules[id]
-            val workSlot =
-                old?.workSlot?.takeIf { it in 1..3 }
-                    ?: firstAvailableWorkSlot(schedules.values)
+            val workSlot = id
             val changed =
                 old == null ||
                     old.intervalMillis != normalizedInterval ||
@@ -103,23 +104,30 @@ object LocalNotificationScheduler {
     fun hasSchedules(context: Context): Boolean =
         synchronized(lock) { readSchedules(context.applicationContext).isNotEmpty() }
 
+    fun clearAll(context: Context) {
+        val appContext = context.applicationContext
+        val snapshot = synchronized(lock) { readSchedules(appContext).values.toList() }
+        TimerNotificationWorkManager.cancelAll(appContext)
+        FixedTimerAlarmManager.cancelAll(appContext, clear = true)
+        val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        snapshot.forEach { schedule ->
+            val pendingIntent = createPendingIntent(appContext, schedule)
+            alarmManager?.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+        synchronized(lock) {
+            prefs(appContext).edit().remove(KEY_SCHEDULES).commit()
+        }
+        InProcessTimerManager.stop()
+        Log.d(TAG, "clearAll count=${snapshot.size}")
+    }
+
     fun timerWorkConfigs(context: Context): List<TimerWorkConfig> =
         synchronized(lock) {
             val appContext = context.applicationContext
-            val schedules = readSchedules(appContext)
-            var changed = false
-            schedules.values.filter { it.workSlot !in 1..3 }.forEach { schedule ->
-                val slot = firstAvailableWorkSlot(schedules.values)
-                if (slot != 0) {
-                    schedules[schedule.id] = schedule.copy(workSlot = slot)
-                    changed = true
-                }
-            }
-            if (changed) writeSchedules(appContext, schedules)
-            schedules.values
-                .filter { it.workSlot in 1..3 }
-                .map { TimerWorkConfig(it.workSlot, it.id, it.intervalMillis) }
-                .sortedBy { it.slot }
+            readSchedules(appContext).values
+                .map { TimerWorkConfig(it.id, it.id, it.intervalMillis) }
+                .sortedBy { it.scheduleId }
         }
 
     fun tryDeliverFromTimerWork(context: Context, scheduleId: Int, source: String): Boolean {
@@ -322,11 +330,6 @@ object LocalNotificationScheduler {
         if (schedule.lastDeliveredAt <= 0L) return true
         val cooldown = (schedule.intervalMillis * 85L / 100L).coerceAtLeast(30_000L)
         return now - schedule.lastDeliveredAt >= cooldown
-    }
-
-    private fun firstAvailableWorkSlot(schedules: Collection<Schedule>): Int {
-        val occupied = schedules.map { it.workSlot }.toSet()
-        return (1..3).firstOrNull { it !in occupied } ?: 0
     }
 
     private fun prefs(context: Context) =

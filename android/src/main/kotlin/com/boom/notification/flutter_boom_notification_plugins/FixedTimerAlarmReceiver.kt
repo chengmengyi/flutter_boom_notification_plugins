@@ -4,13 +4,20 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import kotlin.concurrent.thread
 
 class FixedTimerAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        runCatching {
-            FixedTimerAlarmManager.handleAlarm(context, intent)
-        }.onFailure {
-            Log.d(TAG, "onReceive failed action=${intent.action} error=${it.message}")
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        thread(name = "boom-fixed-timer-receiver") {
+            try {
+                FixedTimerAlarmManager.handleAlarm(appContext, intent)
+            } catch (throwable: Throwable) {
+                Log.d(TAG, "onReceive failed action=${intent.action} error=${throwable.message}")
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 

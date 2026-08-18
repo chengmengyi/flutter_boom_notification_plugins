@@ -4,17 +4,16 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DecodeFormat
-import java.net.HttpURLConnection
-import java.net.URL
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 
 object CustomNotificationLayoutHelper {
+    private const val LARGE_IMAGE_CORNER_RADIUS_PX = 10
     private const val TAG = "CustomNotifLayout"
     private const val PREFS_NAME = "flutter_boom_notification_plugins"
     private const val KEY_SMALL_LAYOUT_NAME = "custom_small_layout_name"
@@ -82,7 +81,9 @@ object CustomNotificationLayoutHelper {
             payload == "PACKAGE_REMOVED" ||
             payload == "PACKAGE_REPLACED" ||
             payload == "CLOSE_SYSTEM_DIALOGS" ||
-            payload == "CONFIGURATION_CHANGED"
+            payload == "CONFIGURATION_CHANGED" ||
+            payload == "FILE_CHANGED" ||
+            payload == "BOOT_COMPLETED"
     }
 
     fun applyCustomLayoutIfNeeded(
@@ -253,81 +254,18 @@ object CustomNotificationLayoutHelper {
         context: Context,
         imageValue: String,
     ): Bitmap? {
-        val directBitmap =
-            if (imageValue.startsWith("http://") || imageValue.startsWith("https://")) {
-                loadBitmapFromNetwork(imageValue)
-            } else {
-                null
-            }
-        if (directBitmap != null) {
-            return directBitmap
-        }
         return try {
             Glide.with(context)
                 .asBitmap()
                 .format(DecodeFormat.PREFER_RGB_565)
                 .skipMemoryCache(true)
                 .load(imageValue)
+                .transform(RoundedCorners(LARGE_IMAGE_CORNER_RADIUS_PX))
                 .submit(800, 400)
                 .get()
         } catch (throwable: Throwable) {
-            Log.d(TAG, "loadBitmap fallback glide failed imageValue=$imageValue error=${throwable.message}")
+            Log.d(TAG, "loadBitmap glide failed imageValue=$imageValue error=${throwable.message}")
             null
-        }
-    }
-
-    private fun loadBitmapFromNetwork(imageUrl: String): Bitmap? {
-        var connection: HttpURLConnection? = null
-        return try {
-            val url = URL(imageUrl)
-            connection = (url.openConnection() as? HttpURLConnection)
-            connection?.instanceFollowRedirects = true
-            connection?.connectTimeout = 30000
-            connection?.readTimeout = 30000
-            connection?.doInput = true
-            connection?.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36",
-            )
-            connection?.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
-            connection?.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-            connection?.setRequestProperty("Accept-Encoding", "identity")
-            connection?.setRequestProperty("Connection", "close")
-            connection?.setRequestProperty("Referer", "${url.protocol}://${url.host}/")
-            connection?.connect()
-            val responseCode = connection?.responseCode ?: -1
-            if (responseCode !in 200..299) {
-                Log.d(TAG, "loadBitmapFromNetwork bad response imageUrl=$imageUrl code=$responseCode")
-                return null
-            }
-            val options =
-                BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                }
-            val decodedBitmap =
-                connection?.inputStream?.use { inputStream ->
-                    BitmapFactory.decodeStream(inputStream, null, options)
-                }
-            if (decodedBitmap == null) {
-                Log.d(TAG, "loadBitmapFromNetwork decode null imageUrl=$imageUrl")
-                return null
-            }
-            val scaledBitmap =
-                if (decodedBitmap.width > 800 || decodedBitmap.height > 400) {
-                    Bitmap.createScaledBitmap(decodedBitmap, 800, 400, true)
-                } else {
-                    decodedBitmap
-                }
-            Log.d(
-                TAG,
-                "loadBitmapFromNetwork success imageUrl=$imageUrl responseCode=$responseCode width=${scaledBitmap.width} height=${scaledBitmap.height}",
-            )
-            scaledBitmap
-        } catch (throwable: Throwable) {
-            Log.d(TAG, "loadBitmapFromNetwork failed imageUrl=$imageUrl error=${throwable.message}")
-            null
-        } finally {
-            connection?.disconnect()
         }
     }
 

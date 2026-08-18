@@ -445,26 +445,10 @@ class FlutterBoomNotificationPlugins {
     );
   }
 
-  /// 按固定时间间隔循环展示本地通知。
-  Future<void> periodicallyShowLocalWithDuration({
-    required int id,
-    String? title,
-    String? body,
-    Duration repeatDurationInterval = _defaultLocalNotificationInterval,
-    AndroidNotificationDetails? notificationDetails,
-    List<LocalNotificationContent>? notificationList,
-  }) {
+  /// 按远程配置中的 scheduled_notification_arr 初始化本地通知任务。
+  Future<void> periodicallyShowLocalWithDuration() {
     return FlutterBoomNotificationPluginsPlatform.instance
-        .periodicallyShowLocalWithDuration(
-          id: id,
-          title: title,
-          body: body,
-          repeatDurationInterval: repeatDurationInterval,
-          notificationDetails: notificationDetails?.toMap(),
-          notificationList: notificationList
-              ?.map((value) => value.toMap())
-              .toList(growable: false),
-        );
+        .periodicallyShowLocalWithDuration();
   }
 
   /// 按固定时间间隔循环展示媒体通知。
@@ -512,18 +496,8 @@ class FlutterBoomNotificationPlugins {
   }
 
   /// 注册广播触发的通知提醒。
-  Future<void> registerBroadcastNotifications({
-    List<LocalNotificationContent>? notificationList,
-    required List<BroadcastNotificationConfig> configList,
-  }) {
+  Future<void> registerBroadcastNotifications() {
     return FlutterBoomNotificationPluginsPlatform.instance
-        .registerBroadcastNotifications(
-          notificationList: notificationList
-              ?.map((value) => value.toMap())
-              .toList(growable: false),
-          configList: configList
-              .map((value) => value.toMap())
-              .toList(growable: false),
-        );
+        .registerBroadcastNotifications();
   }
 }

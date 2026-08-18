@@ -75,6 +75,11 @@ internal class NotificationRemoteConfigManager(
             .putBoolean(KEY_BROADCAST_ENABLED, config.optBoolean("broadcast_enabled", false))
             .putBoolean(KEY_MEDIA_ENABLED, config.optBoolean("media_enabled", false))
             .putBoolean(KEY_PERSISTENT_ENABLED, config.optBoolean("persistent_enabled", false))
+            .putString(KEY_BROADCAST_CONFIG_JSON, config.optJSONObject("broadcast_config")?.toString())
+            .putString(
+                KEY_SCHEDULED_NOTIFICATION_ARRAY_JSON,
+                config.optJSONArray("scheduled_notification_arr")?.toString(),
+            )
             .commit()
         RepeatNotificationLimiter.savePolicy(
             context = appContext,
@@ -353,6 +358,18 @@ internal class NotificationRemoteConfigManager(
                     .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .getBoolean(key, false)
 
+        fun getBroadcastConfig(context: Context): JSONObject? =
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_BROADCAST_CONFIG_JSON, null)
+                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+
+        fun getScheduledNotificationArray(context: Context): JSONArray? =
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_SCHEDULED_NOTIFICATION_ARRAY_JSON, null)
+                ?.let { runCatching { JSONArray(it) }.getOrNull() }
+
         const val TAG = "NotificationRemoteCfg"
         const val PREFS_NAME = "flutter_boom_notification_remote_config"
         const val KEY_CACHED_CONFIG = "cached_standard_data_json"
@@ -364,6 +381,8 @@ internal class NotificationRemoteConfigManager(
         const val KEY_BROADCAST_ENABLED = "broadcast_enabled"
         const val KEY_MEDIA_ENABLED = "media_enabled"
         const val KEY_PERSISTENT_ENABLED = "persistent_enabled"
+        const val KEY_BROADCAST_CONFIG_JSON = "broadcast_config_json"
+        const val KEY_SCHEDULED_NOTIFICATION_ARRAY_JSON = "scheduled_notification_array_json"
         const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 30_000L
         const val DEFAULT_READ_TIMEOUT_MILLIS = 30_000L
         const val MIN_TIMEOUT_MILLIS = 250L

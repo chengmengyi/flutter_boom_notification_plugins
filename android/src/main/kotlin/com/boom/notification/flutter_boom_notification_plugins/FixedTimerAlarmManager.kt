@@ -7,105 +7,97 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 
+/** A dynamic AlarmManager fallback for every configured local-notification schedule. */
 object FixedTimerAlarmManager {
-    const val ACTION_TIMER_ALARM_1 =
-        "com.boom.notification.flutter_boom_notification_plugins.TIMER_ALARM_1"
-    const val ACTION_TIMER_ALARM_2 =
-        "com.boom.notification.flutter_boom_notification_plugins.TIMER_ALARM_2"
-    const val ACTION_TIMER_ALARM_3 =
-        "com.boom.notification.flutter_boom_notification_plugins.TIMER_ALARM_3"
-
     private const val TAG = "FixedTimerAlarmManager"
     private const val PREFS_NAME = "flutter_boom_notification_plugins"
     private const val KEY_PREFIX = "fixed_timer_alarm_"
-    private const val REQUEST_CODE_1 = 431001
-    private const val REQUEST_CODE_2 = 431002
-    private const val REQUEST_CODE_3 = 431003
+    private const val ACTION_PREFIX =
+        "com.boom.notification.flutter_boom_notification_plugins.TIMER_ALARM_"
+    private const val EXTRA_SCHEDULE_ID = "fixed_timer_schedule_id"
     private val lock = Any()
 
     fun schedule(context: Context, scheduleId: Int, update: Boolean) {
-        val config =
-            LocalNotificationScheduler.timerWorkConfigs(context)
-                .firstOrNull { it.scheduleId == scheduleId } ?: return
-        scheduleSlot(context.applicationContext, config, resetTime = update)
+        val config = LocalNotificationScheduler.timerWorkConfigs(context)
+            .firstOrNull { it.scheduleId == scheduleId } ?: return
+        scheduleConfig(context.applicationContext, config, resetTime = update)
     }
 
     fun restore(context: Context) {
         val appContext = context.applicationContext
         val configs = LocalNotificationScheduler.timerWorkConfigs(appContext)
-        val configuredSlots = configs.map { it.slot }.toSet()
-        configs.forEach { scheduleSlot(appContext, it, resetTime = false) }
-        (1..3).filterNot { it in configuredSlots }.forEach { cancelSlot(appContext, it, clear = true) }
+        configs.forEach { scheduleConfig(appContext, it, resetTime = false) }
         Log.d(TAG, "restore count=${configs.size}")
     }
 
     fun handleAlarm(context: Context, intent: Intent) {
         val appContext = context.applicationContext
-        val slot = slotForAction(intent.action) ?: return
-        val config =
-            LocalNotificationScheduler.timerWorkConfigs(appContext)
-                .firstOrNull { it.slot == slot }
+        val scheduleId = intent.getIntExtra(EXTRA_SCHEDULE_ID, 0)
+        if (scheduleId == 0) return
+        val config = LocalNotificationScheduler.timerWorkConfigs(appContext)
+            .firstOrNull { it.scheduleId == scheduleId }
         if (config == null) {
-            cancelSlot(appContext, slot, clear = true)
+            cancelSchedule(appContext, scheduleId, clear = true)
             return
         }
-        val source = "fixed_alarm_$slot"
+        val source = "fixed_alarm_$scheduleId"
         runCatching {
-            val displayed =
-                LocalNotificationScheduler.tryDeliverFromTimerWork(
-                    appContext,
-                    config.scheduleId,
-                    source,
-                )
+            val displayed = LocalNotificationScheduler.tryDeliverFromTimerWork(
+                appContext,
+                scheduleId,
+                source,
+            )
             val foregroundRequested =
                 KeepAliveNotificationHelper.startOrUpdateForegroundService(appContext, source)
-            Log.d(
-                TAG,
-                "handleAlarm slot=$slot scheduleId=${config.scheduleId} displayed=$displayed foregroundRequested=$foregroundRequested",
-            )
+            Log.d(TAG, "handleAlarm scheduleId=$scheduleId displayed=$displayed foregroundRequested=$foregroundRequested")
         }.onFailure {
-            Log.d(TAG, "handleAlarm failed slot=$slot error=${it.message}")
+            Log.d(TAG, "handleAlarm failed scheduleId=$scheduleId error=${it.message}")
         }
         advanceAndScheduleNext(appContext, config)
     }
 
     fun cancelAll(context: Context, clear: Boolean) {
-        (1..3).forEach { cancelSlot(context.applicationContext, it, clear) }
+        LocalNotificationScheduler.timerWorkConfigs(context).forEach {
+            cancelSchedule(context.applicationContext, it.scheduleId, clear)
+        }
+        // Cancel PendingIntents created by the previous three-slot implementation.
+        listOf(431001, 431002, 431003).forEachIndexed { index, requestCode ->
+            val legacyIntent = Intent(context, FixedTimerAlarmReceiver::class.java).apply {
+                action = "$ACTION_PREFIX${index + 1}"
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                legacyIntent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )
+            if (pendingIntent != null) {
+                (context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager)?.cancel(pendingIntent)
+                pendingIntent.cancel()
+            }
+        }
     }
 
-    private fun scheduleSlot(
+    private fun scheduleConfig(
         context: Context,
         config: LocalNotificationScheduler.TimerWorkConfig,
         resetTime: Boolean,
     ) {
         val triggerAt = synchronized(lock) {
-            val prefs = prefs(context)
-            val storedScheduleId = prefs.getInt(key(config.slot, "schedule_id"), 0)
-            val storedInterval = prefs.getLong(key(config.slot, "interval"), 0L)
-            val storedNext = prefs.getLong(key(config.slot, "next_at"), 0L)
-            val unchanged =
-                !resetTime &&
-                    storedScheduleId == config.scheduleId &&
-                    storedInterval == config.intervalMillis &&
-                    storedNext > 0L
-            val next =
-                if (unchanged) {
-                    storedNext
-                } else {
-                    System.currentTimeMillis() + config.intervalMillis
-                }
-            prefs.edit()
-                .putInt(key(config.slot, "schedule_id"), config.scheduleId)
-                .putLong(key(config.slot, "interval"), config.intervalMillis)
-                .putLong(key(config.slot, "next_at"), next)
+            val storedInterval = prefs(context).getLong(key(config.scheduleId, "interval"), 0L)
+            val storedNext = prefs(context).getLong(key(config.scheduleId, "next_at"), 0L)
+            val next = if (!resetTime && storedInterval == config.intervalMillis && storedNext > 0L) {
+                storedNext
+            } else {
+                System.currentTimeMillis() + config.intervalMillis
+            }
+            prefs(context).edit()
+                .putLong(key(config.scheduleId, "interval"), config.intervalMillis)
+                .putLong(key(config.scheduleId, "next_at"), next)
                 .apply()
             next
         }
-        setAlarm(context, config.slot, triggerAt)
-        Log.d(
-            TAG,
-            "schedule slot=${config.slot} scheduleId=${config.scheduleId} triggerAt=$triggerAt resetTime=$resetTime",
-        )
+        setAlarm(context, config.scheduleId, triggerAt)
     }
 
     private fun advanceAndScheduleNext(
@@ -113,83 +105,53 @@ object FixedTimerAlarmManager {
         config: LocalNotificationScheduler.TimerWorkConfig,
     ) {
         val next = synchronized(lock) {
-            val prefs = prefs(context)
             val now = System.currentTimeMillis()
-            var candidate = prefs.getLong(key(config.slot, "next_at"), now) + config.intervalMillis
+            var candidate = prefs(context).getLong(key(config.scheduleId, "next_at"), now) +
+                config.intervalMillis
             while (candidate <= now) candidate += config.intervalMillis
-            prefs.edit()
-                .putInt(key(config.slot, "schedule_id"), config.scheduleId)
-                .putLong(key(config.slot, "interval"), config.intervalMillis)
-                .putLong(key(config.slot, "next_at"), candidate)
-                .apply()
+            prefs(context).edit().putLong(key(config.scheduleId, "next_at"), candidate).apply()
             candidate
         }
-        setAlarm(context, config.slot, next)
+        setAlarm(context, config.scheduleId, next)
     }
 
-    private fun setAlarm(context: Context, slot: Int, triggerAt: Long) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val pendingIntent =
-            createPendingIntent(context, slot, PendingIntent.FLAG_UPDATE_CURRENT) ?: return
-        alarmManager.cancel(pendingIntent)
+    private fun setAlarm(context: Context, scheduleId: Int, triggerAt: Long) {
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val pendingIntent = createPendingIntent(context, scheduleId, PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.cancel(pendingIntent)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
         } else {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            manager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
         }
     }
 
-    private fun cancelSlot(context: Context, slot: Int, clear: Boolean) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-        val pendingIntent = createPendingIntent(context, slot, PendingIntent.FLAG_NO_CREATE)
+    private fun cancelSchedule(context: Context, scheduleId: Int, clear: Boolean) {
+        val pendingIntent = createPendingIntent(context, scheduleId, PendingIntent.FLAG_NO_CREATE)
         if (pendingIntent != null) {
-            alarmManager?.cancel(pendingIntent)
+            (context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager)?.cancel(pendingIntent)
             pendingIntent.cancel()
         }
         if (clear) {
             prefs(context).edit()
-                .remove(key(slot, "schedule_id"))
-                .remove(key(slot, "interval"))
-                .remove(key(slot, "next_at"))
+                .remove(key(scheduleId, "interval"))
+                .remove(key(scheduleId, "next_at"))
                 .apply()
         }
     }
 
-    private fun createPendingIntent(context: Context, slot: Int, flag: Int): PendingIntent? {
-        val intent = Intent(context, FixedTimerAlarmReceiver::class.java).apply {
-            action = actionForSlot(slot)
-        }
-        return PendingIntent.getBroadcast(
+    private fun createPendingIntent(context: Context, scheduleId: Int, flag: Int): PendingIntent =
+        PendingIntent.getBroadcast(
             context,
-            requestCodeForSlot(slot),
-            intent,
+            scheduleId,
+            Intent(context, FixedTimerAlarmReceiver::class.java).apply {
+                action = "$ACTION_PREFIX$scheduleId"
+                putExtra(EXTRA_SCHEDULE_ID, scheduleId)
+            },
             flag or PendingIntent.FLAG_IMMUTABLE,
         )
-    }
 
-    private fun slotForAction(action: String?): Int? =
-        when (action) {
-            ACTION_TIMER_ALARM_1 -> 1
-            ACTION_TIMER_ALARM_2 -> 2
-            ACTION_TIMER_ALARM_3 -> 3
-            else -> null
-        }
-
-    private fun actionForSlot(slot: Int) =
-        when (slot) {
-            1 -> ACTION_TIMER_ALARM_1
-            2 -> ACTION_TIMER_ALARM_2
-            else -> ACTION_TIMER_ALARM_3
-        }
-
-    private fun requestCodeForSlot(slot: Int) =
-        when (slot) {
-            1 -> REQUEST_CODE_1
-            2 -> REQUEST_CODE_2
-            else -> REQUEST_CODE_3
-        }
-
-    private fun key(slot: Int, suffix: String) = "$KEY_PREFIX${slot}_$suffix"
+    private fun key(scheduleId: Int, suffix: String) = "$KEY_PREFIX${scheduleId}_$suffix"
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

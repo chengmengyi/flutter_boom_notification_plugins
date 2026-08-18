@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
+import kotlin.concurrent.thread
 
 class UnlockNotificationReceiver : BroadcastReceiver() {
     companion object {
@@ -64,37 +65,18 @@ class UnlockNotificationReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        try {
-            if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-                Log.d(
-                    "LocalNotificationPlugin",
-                    "UnlockNotificationReceiver blocked action=${intent.action}",
-                )
-                return
+        if (broadcastAction != null && broadcastAction != intent.action) return
+        if (intent.action == Intent.ACTION_BATTERY_CHANGED && isInitialStickyBroadcast) return
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        thread(name = "boom-broadcast-notification") {
+            try {
+                FlutterBoomNotificationPluginsPlugin.handleUnlockBroadcast(appContext, intent.action)
+            } catch (throwable: Throwable) {
+                Log.d("LocalNotificationPlugin", "UnlockNotificationReceiver failed action=${intent.action} error=${throwable.message}")
+            } finally {
+                pendingResult.finish()
             }
-            if (broadcastAction != null && broadcastAction != intent.action) {
-                return
-            }
-            if (intent.action == Intent.ACTION_BATTERY_CHANGED && isInitialStickyBroadcast) {
-                Log.d(
-                    "LocalNotificationPlugin",
-                    "UnlockNotificationReceiver.skipInitialBatteryChanged",
-                )
-                return
-            }
-            Log.d(
-                "LocalNotificationPlugin",
-                "UnlockNotificationReceiver.onReceive action=${intent.action}",
-            )
-            FlutterBoomNotificationPluginsPlugin.handleUnlockBroadcast(
-                context,
-                intent.action,
-            )
-        } catch (e: Exception) {
-            Log.d(
-                "LocalNotificationPlugin",
-                "UnlockNotificationReceiver failed action=${intent.action} error=${e.message}",
-            )
         }
     }
 }

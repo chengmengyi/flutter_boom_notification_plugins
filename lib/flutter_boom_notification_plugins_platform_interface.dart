@@ -317,14 +317,7 @@ abstract class FlutterBoomNotificationPluginsPlatform
   }
 
   /// 按固定时间间隔循环展示本地通知。
-  Future<void> periodicallyShowLocalWithDuration({
-    required int id,
-    String? title,
-    String? body,
-    Duration repeatDurationInterval = const Duration(minutes: 30),
-    Map<String, Object?>? notificationDetails,
-    List<Map<String, Object?>>? notificationList,
-  }) {
+  Future<void> periodicallyShowLocalWithDuration() {
     throw UnimplementedError(
       'periodicallyShowLocalWithDuration() has not been implemented.',
     );
@@ -347,10 +340,7 @@ abstract class FlutterBoomNotificationPluginsPlatform
   }
 
   /// 注册广播触发的通知提醒。
-  Future<void> registerBroadcastNotifications({
-    List<Map<String, Object?>>? notificationList,
-    required List<Map<String, Object?>> configList,
-  }) {
+  Future<void> registerBroadcastNotifications() {
     throw UnimplementedError(
       'registerBroadcastNotifications() has not been implemented.',
     );

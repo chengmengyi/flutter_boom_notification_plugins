@@ -437,23 +437,10 @@ class MethodChannelFlutterBoomNotificationPlugins
 
   /// 通过原生通道按时间间隔循环展示本地通知。
   @override
-  Future<void> periodicallyShowLocalWithDuration({
-    required int id,
-    String? title,
-    String? body,
-    Duration repeatDurationInterval = const Duration(minutes: 30),
-    Map<String, Object?>? notificationDetails,
-    List<Map<String, Object?>>? notificationList,
-  }) {
-    return methodChannel
-        .invokeMethod<void>('periodicallyShowLocalWithDuration', {
-          'id': id,
-          'title': title,
-          'body': body,
-          'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
-          'notificationDetails': notificationDetails,
-          'notificationList': notificationList,
-        });
+  Future<void> periodicallyShowLocalWithDuration() {
+    return methodChannel.invokeMethod<void>(
+      'periodicallyShowLocalWithDuration',
+    );
   }
 
   /// 通过原生通道按时间间隔循环展示媒体通知。
@@ -483,14 +470,8 @@ class MethodChannelFlutterBoomNotificationPlugins
 
   /// 通过原生通道注册广播触发通知。
   @override
-  Future<void> registerBroadcastNotifications({
-    List<Map<String, Object?>>? notificationList,
-    required List<Map<String, Object?>> configList,
-  }) {
-    return methodChannel.invokeMethod<void>('registerBroadcastNotifications', {
-      'notificationList': notificationList,
-      'configList': configList,
-    });
+  Future<void> registerBroadcastNotifications() {
+    return methodChannel.invokeMethod<void>('registerBroadcastNotifications');
   }
 
   /// 处理原生层主动回传的方法调用。

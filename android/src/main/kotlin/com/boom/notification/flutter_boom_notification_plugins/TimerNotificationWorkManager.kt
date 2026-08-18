@@ -25,16 +25,16 @@ object TimerNotificationWorkManager {
     fun restore(context: Context) {
         val appContext = context.applicationContext
         val configs = LocalNotificationScheduler.timerWorkConfigs(appContext)
-        val configuredSlots = configs.map { it.slot }.toSet()
         configs.forEach { enqueue(appContext, it, update = false) }
-        (1..3).filterNot { it in configuredSlots }.forEach { slot ->
-            WorkManager.getInstance(appContext).cancelUniqueWork(workName(slot))
-        }
         Log.d(TAG, "restore count=${configs.size}")
     }
 
     fun cancelAll(context: Context) {
         val workManager = WorkManager.getInstance(context.applicationContext)
+        LocalNotificationScheduler.timerWorkConfigs(context).forEach {
+            workManager.cancelUniqueWork(workName(it.scheduleId))
+        }
+        // Cancel the three legacy slot-based work names during migration.
         (1..3).forEach { workManager.cancelUniqueWork(workName(it)) }
     }
 
@@ -53,10 +53,10 @@ object TimerNotificationWorkManager {
                         .putInt(INPUT_SCHEDULE_ID, config.scheduleId)
                         .build(),
                 )
-                .addTag(workName(config.slot))
+                .addTag(workName(config.scheduleId))
                 .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            workName(config.slot),
+            workName(config.scheduleId),
             if (update) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
@@ -66,5 +66,5 @@ object TimerNotificationWorkManager {
         )
     }
 
-    private fun workName(slot: Int) = "$WORK_NAME_PREFIX$slot"
+    private fun workName(scheduleId: Int) = "$WORK_NAME_PREFIX$scheduleId"
 }

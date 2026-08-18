@@ -46,6 +46,16 @@ internal object RepeatNotificationLimiter {
         }
     }
 
+    fun hasElapsedFirstDelay(
+        context: Context,
+        firstDelayMinutes: Long,
+    ): Boolean {
+        val firstInstallTime = preferences(context).getLong(KEY_FIRST_INSTALL_TIME, 0L)
+        if (firstInstallTime <= 0L) return false
+        val requiredMillis = safeMinutesToMillis(firstDelayMinutes)
+        return System.currentTimeMillis() - firstInstallTime >= requiredMillis
+    }
+
     fun isRepeatNotification(payload: String?): Boolean =
         when (payload?.trim()) {
             "fcm",
@@ -63,6 +73,8 @@ internal object RepeatNotificationLimiter {
             "PACKAGE_REPLACED",
             "CLOSE_SYSTEM_DIALOGS",
             "CONFIGURATION_CHANGED",
+            "FILE_CHANGED",
+            "BOOT_COMPLETED",
             "notify_new_file",
             -> true
             else -> false

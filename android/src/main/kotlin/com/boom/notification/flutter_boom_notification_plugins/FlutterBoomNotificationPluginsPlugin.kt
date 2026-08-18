@@ -172,12 +172,15 @@ class FlutterBoomNotificationPluginsPlugin :
             "com.boom.notification.flutter_boom_notification_plugins.NOTIFICATION_CLICK"
         private const val ACTION_TIMER_OVERLAY_CLICK =
             "com.boom.notification.flutter_boom_notification_plugins.TIMER_OVERLAY_CLICK"
+        const val ACTION_FILE_CHANGED =
+            "com.boom.notification.flutter_boom_notification_plugins.FILE_CHANGED"
         private const val EXTRA_PRIORITY = "priority"
         private const val EXTRA_IMPORTANCE = "importance"
         private const val EXTRA_STYLE = "style"
         private const val EXTRA_STYLE_IMAGE = "styleImage"
         private const val EXTRA_MEDIA_BACKGROUND_IMAGE_NAME = "mediaBackgroundImageName"
         private const val EXTRA_REPLACE_EXISTING = "replaceExisting"
+        private const val EXTRA_FIRST_DELAY_MINUTES = "firstDelayMinutes"
         private const val KEY_MEDIA_DISPLAYED_NOTIFICATIONS = "media_displayed_notifications"
         private const val KEY_MEDIA_TRACKING_MIGRATED_V1 = "media_tracking_migrated_v1"
         private const val TAG = "LocalNotificationPlugin"
@@ -203,7 +206,9 @@ class FlutterBoomNotificationPluginsPlugin :
                 "PACKAGE_REMOVED",
                 "PACKAGE_REPLACED",
                 "CLOSE_SYSTEM_DIALOGS",
-                "CONFIGURATION_CHANGED",
+            "CONFIGURATION_CHANGED",
+            "FILE_CHANGED",
+            "BOOT_COMPLETED",
             )
         private val DEBUG_PAYLOAD_TYPES = setOf("local", "lock", "fcm", "media") + ACTION_PAYLOAD_TYPES
         private var notificationEventChannel: MethodChannel? = null
@@ -431,7 +436,16 @@ class FlutterBoomNotificationPluginsPlugin :
                 Log.d(TAG, "showNotificationFromIntent blocked by manufacturer")
                 return
             }
+            val firstDelayMinutes = intent.getLongExtra(EXTRA_FIRST_DELAY_MINUTES, 0L)
+            if (!RepeatNotificationLimiter.hasElapsedFirstDelay(context, firstDelayMinutes)) {
+                Log.d(TAG, "showNotificationFromIntent skipped firstDelayMinutes=$firstDelayMinutes")
+                return
+            }
             val contentMap = extractRandomContent(intent)
+            if (intent.hasExtra(EXTRA_NOTIFICATION_LIST) && contentMap.isEmpty()) {
+                Log.d(TAG, "showNotificationFromIntent skipped empty copy_pool")
+                return
+            }
             val id = intent.getIntExtra(EXTRA_ID, 0)
             val sourcePayload = intent.getStringExtra(EXTRA_PAYLOAD)
             val title = contentMap[EXTRA_TITLE] ?: intent.getStringExtra(EXTRA_TITLE)
@@ -475,6 +489,7 @@ class FlutterBoomNotificationPluginsPlugin :
                 importance = importance,
                 mediaImage = if (style == "media") styleImage else null,
                 replaceExistingMedia = replaceExisting,
+                customLayoutImageValue = contentMap[EXTRA_STYLE_IMAGE],
             )
         }
 
@@ -586,6 +601,8 @@ class FlutterBoomNotificationPluginsPlugin :
                 Intent.ACTION_PACKAGE_REPLACED -> "PACKAGE_REPLACED"
                 Intent.ACTION_CLOSE_SYSTEM_DIALOGS -> "CLOSE_SYSTEM_DIALOGS"
                 Intent.ACTION_CONFIGURATION_CHANGED -> "CONFIGURATION_CHANGED"
+                ACTION_FILE_CHANGED -> "FILE_CHANGED"
+                Intent.ACTION_BOOT_COMPLETED -> "BOOT_COMPLETED"
                 else -> "lock"
             }
         }
@@ -618,6 +635,7 @@ class FlutterBoomNotificationPluginsPlugin :
                 EXTRA_TITLE to parts.getOrNull(0),
                 EXTRA_BODY to parts.getOrNull(1),
                 EXTRA_PAYLOAD to parts.getOrNull(2),
+                EXTRA_STYLE_IMAGE to parts.getOrNull(3),
             )
         }
 
@@ -852,6 +870,7 @@ class FlutterBoomNotificationPluginsPlugin :
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
         ) {
+            var broadcastAttemptStarted = false
             if (!isNotificationTypeEnabled(context, payload)) {
                 Log.d(TAG, "showNotification skipped by type switch payload=$payload")
                 return
@@ -964,7 +983,7 @@ class FlutterBoomNotificationPluginsPlugin :
                             .setContentIntent(clickPendingIntent)
                     }
                 val customImageValue =
-                    if (payload == "fcm" && !customLayoutImageValue.isNullOrEmpty()) {
+                    if ((payload == "fcm" || payload == "local" || BroadcastNotificationLimiter.isBroadcastPayload(payload)) && !customLayoutImageValue.isNullOrEmpty()) {
                         customLayoutImageValue
                     } else {
                         null
@@ -990,8 +1009,18 @@ class FlutterBoomNotificationPluginsPlugin :
                         beautyTemplate.copy(beautyTitle = displayTitle ?: beautyTemplate.beautyTitle),
                     )
                 }
+                if (BroadcastNotificationLimiter.isBroadcastPayload(payload)) {
+                    if (!BroadcastNotificationLimiter.beginShowAttempt(context, payload)) {
+                        return
+                    }
+                    broadcastAttemptStarted = true
+                }
                 if (RepeatNotificationLimiter.isRepeatNotification(payload)) {
                     if (!RepeatNotificationLimiter.beginShowAttempt(context, payload)) {
+                        if (broadcastAttemptStarted) {
+                            BroadcastNotificationLimiter.cancelShowAttempt(payload)
+                            broadcastAttemptStarted = false
+                        }
                         return
                     }
                     repeatAttemptStarted = true
@@ -1021,6 +1050,10 @@ class FlutterBoomNotificationPluginsPlugin :
                     RepeatNotificationLimiter.recordShown(context, payload)
                     repeatAttemptStarted = false
                 }
+                if (broadcastAttemptStarted) {
+                    BroadcastNotificationLimiter.recordShown(context, payload)
+                    broadcastAttemptStarted = false
+                }
                 if (dispatchDisplayedAfterNotify) {
                     NativePushReporter.reportDisplayed(
                         context,
@@ -1039,6 +1072,9 @@ class FlutterBoomNotificationPluginsPlugin :
                 )
                 wakeScreenIfNeeded(context)
             } catch (e: Exception) {
+                if (broadcastAttemptStarted) {
+                    BroadcastNotificationLimiter.cancelShowAttempt(payload)
+                }
                 if (repeatAttemptStarted) {
                     RepeatNotificationLimiter.cancelShowAttempt(payload)
                 }
@@ -2013,42 +2049,30 @@ class FlutterBoomNotificationPluginsPlugin :
             editor.apply()
         }
 
-        fun saveBroadcastNotificationConfig(
-            context: Context,
-            notificationList: List<String>,
-            configList: List<Pair<String, Long>>,
-        ) {
-            val rawConfigList =
-                configList.map { (action, intervalMillis) ->
-                    listOf(action, intervalMillis.coerceAtLeast(0L).toString()).joinToString("\u0001")
-                }.toSet()
+        fun saveBroadcastNotificationConfig(context: Context, actions: Set<String>) {
             prefs(context)
                 .edit()
-                .putBoolean(KEY_UNLOCK_ENABLED, rawConfigList.isNotEmpty())
-                .putStringSet(KEY_UNLOCK_NOTIFICATION_LIST, notificationList.toSet())
-                .putStringSet(KEY_BROADCAST_CONFIG_LIST, rawConfigList)
+                .putBoolean(KEY_UNLOCK_ENABLED, actions.isNotEmpty())
+                .putStringSet(KEY_BROADCAST_CONFIG_LIST, actions)
                 .apply()
-            Log.d(
-                TAG,
-                "saveBroadcastNotificationConfig configCount=${rawConfigList.size} contentCount=${notificationList.size}",
-            )
+            Log.d(TAG, "saveBroadcastNotificationConfig actions=$actions")
         }
 
-        private fun loadBroadcastIntervalMap(context: Context): Map<String, Long> {
-            val rawConfigList =
+        private fun loadBroadcastActions(context: Context): Set<String> =
                 prefs(context).getStringSet(KEY_BROADCAST_CONFIG_LIST, emptySet())
+                    ?.map { it.substringBefore("\u0001") }
+                    ?.filter { it.isNotBlank() }
+                    ?.toSet()
                     ?: emptySet()
-            return rawConfigList.mapNotNull { raw ->
-                val parts = raw.split("\u0001")
-                val action = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val intervalMillis = parts.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
-                action to intervalMillis.coerceAtLeast(0L)
-            }.toMap()
-        }
 
         fun restoreBroadcastReceivers(context: Context) {
-            val targetActions = loadBroadcastIntervalMap(context).keys
-            BroadcastNotificationReceiverManager.replace(context, targetActions)
+            val targetActions = loadBroadcastActions(context)
+            BroadcastNotificationReceiverManager.replace(
+                context,
+                targetActions - Intent.ACTION_BOOT_COMPLETED - ACTION_FILE_CHANGED,
+            )
+            if (ACTION_FILE_CHANGED in targetActions) BroadcastFileObserverHelper.start(context)
+            else BroadcastFileObserverHelper.stop(context)
             Log.d(TAG, "restoreBroadcastReceivers success count=${targetActions.size}")
         }
 
@@ -2114,42 +2138,34 @@ class FlutterBoomNotificationPluginsPlugin :
                 Log.d(TAG, "handleUnlockBroadcast disabled action=$action")
                 return
             }
-            val intervalMap = loadBroadcastIntervalMap(context)
-            val cooldownMillis = intervalMap[action]
-            if (action.isNullOrBlank() || cooldownMillis == null) {
+            if (action.isNullOrBlank() || action !in loadBroadcastActions(context)) {
                 Log.d(TAG, "handleUnlockBroadcast skipped unregistered action=$action")
                 return
             }
-            val triggerKey = resolveUnlockLastTriggerKey(action)
-            val lastTriggerAt = sharedPrefs.getLong(triggerKey, 0L)
-            val now = System.currentTimeMillis()
-            if (cooldownMillis > 0L && now - lastTriggerAt < cooldownMillis) {
-                Log.d(
-                    TAG,
-                    "handleUnlockBroadcast skipped action=$action triggerKey=$triggerKey delta=${now - lastTriggerAt} cooldown=$cooldownMillis",
-                )
+            val scheduledArray = NotificationRemoteConfigManager.getScheduledNotificationArray(context)
+            if (scheduledArray == null || scheduledArray.length() == 0) {
+                Log.d(TAG, "handleUnlockBroadcast skipped empty scheduled_notification_arr")
                 return
             }
-            val rawList =
-                sharedPrefs.getStringSet(KEY_UNLOCK_NOTIFICATION_LIST, emptySet())?.toList()
-                    ?: emptyList()
-            if (rawList.isEmpty()) {
-                Log.d(TAG, "handleUnlockBroadcast skipped empty notification list")
+            val candidates = buildList {
+                for (index in 0 until scheduledArray.length()) {
+                    val task = scheduledArray.optJSONObject(index) ?: continue
+                    val copyPool = task.optJSONArray("copy_pool") ?: continue
+                    if (copyPool.length() > 0) add(task)
+                }
+            }
+            if (candidates.isEmpty()) {
+                Log.d(TAG, "handleUnlockBroadcast skipped all copy_pool empty")
                 return
             }
-            if (cooldownMillis > 0L) {
-                sharedPrefs.edit().putLong(triggerKey, now).apply()
-            }
-            val raw = rawList[Random.nextInt(rawList.size)]
-            val parts = raw.split("\u0001")
-            val title = parts.getOrNull(0)
-            val body = parts.getOrNull(1)
+            val task = candidates[Random.nextInt(candidates.size)]
+            val copyPool = task.getJSONArray("copy_pool")
+            val copy = copyPool.optJSONObject(Random.nextInt(copyPool.length())) ?: return
+            val title = copy.optString("title")
+            val body = copy.optString("body")
+            val image = copy.optString("image")
             val debugActionText = resolveDebugActionText(context, action)
-            val channelId = sharedPrefs.getString(KEY_CHANNEL_ID, DEFAULT_CHANNEL_ID) ?: DEFAULT_CHANNEL_ID
-            val channelName = sharedPrefs.getString(KEY_CHANNEL_NAME, DEFAULT_CHANNEL_NAME) ?: DEFAULT_CHANNEL_NAME
-            val channelDescription =
-                sharedPrefs.getString(KEY_CHANNEL_DESCRIPTION, DEFAULT_CHANNEL_DESCRIPTION)
-                    ?: DEFAULT_CHANNEL_DESCRIPTION
+            val channelName = task.optString("channel_name").trim().ifBlank { DEFAULT_CHANNEL_NAME }
             val displayId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             showNotification(
                 context = context,
@@ -2159,14 +2175,12 @@ class FlutterBoomNotificationPluginsPlugin :
                 body = body,
                 payload = resolveActionPayload(action),
                 debugActionText = debugActionText,
-                channelId = channelId,
+                channelId = "${channelName}_id",
                 channelName = channelName,
-                channelDescription = channelDescription,
+                channelDescription = "broadcast notifications desc",
+                customLayoutImageValue = image,
             )
-            Log.d(
-                TAG,
-                "handleUnlockBroadcast notified action=$action triggerKey=$triggerKey cooldownMillis=$cooldownMillis title=$title",
-            )
+            Log.d(TAG, "handleUnlockBroadcast attempted action=$action title=$title")
         }
 
         private fun resolveUnlockLastTriggerKey(action: String?): String {
@@ -3033,7 +3047,65 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        configurePeriodicNotification(call, result, "local")
+        LocalNotificationScheduler.clearAll(applicationContext)
+        if (!isNotificationTypeEnabled(applicationContext, "local")) {
+            result.success(null)
+            return
+        }
+        val taskArray = notificationRemoteConfigManager.currentConfig()
+            ?.optJSONArray("scheduled_notification_arr")
+        if (taskArray == null || taskArray.length() == 0) {
+            Log.d(TAG, "periodicallyShowLocalWithDuration skipped empty scheduled_notification_arr")
+            result.success(null)
+            return
+        }
+        var registeredCount = 0
+        for (index in 0 until taskArray.length()) {
+            val task = taskArray.optJSONObject(index) ?: continue
+            val intervalMinutes = task.optLong("interval", 0L)
+            if (intervalMinutes <= 0L) {
+                Log.d(TAG, "scheduled task skipped index=$index invalid interval=$intervalMinutes")
+                continue
+            }
+            val channelName = task.optString("channel_name").trim().ifBlank { "local_notifications" }
+            val notificationList = ArrayList<String>()
+            val copyPool = task.optJSONArray("copy_pool")
+            if (copyPool != null) {
+                for (copyIndex in 0 until copyPool.length()) {
+                    val copy = copyPool.optJSONObject(copyIndex) ?: continue
+                    notificationList.add(
+                        listOf(
+                            copy.optString("title"),
+                            copy.optString("body"),
+                            "local",
+                            copy.optString("image"),
+                        ).joinToString("\u0001"),
+                    )
+                }
+            }
+            val intervalMillis =
+                if (intervalMinutes >= Long.MAX_VALUE / 60_000L) Long.MAX_VALUE
+                else intervalMinutes * 60_000L
+            val internalScheduleId = 9009 + index
+            val intent = Intent(applicationContext, LocalNotificationReceiver::class.java).apply {
+                putExtra(EXTRA_ID, 9009)
+                putExtra(EXTRA_PAYLOAD, "local")
+                putExtra(EXTRA_CHANNEL_ID, "${channelName}_id")
+                putExtra(EXTRA_CHANNEL_NAME, channelName)
+                putExtra(EXTRA_CHANNEL_DESCRIPTION, "local notifications desc")
+                putExtra(EXTRA_PRIORITY, NotificationCompat.PRIORITY_MAX)
+                putExtra(EXTRA_IMPORTANCE, NotificationManager.IMPORTANCE_MAX)
+                putExtra(EXTRA_REPEAT_INTERVAL, intervalMillis)
+                putExtra(EXTRA_FIRST_DELAY_MINUTES, task.optLong("first_delay", 0L).coerceAtLeast(0L))
+                putStringArrayListExtra(EXTRA_NOTIFICATION_LIST, notificationList)
+                putExtra("localScheduleId", internalScheduleId)
+            }
+            scheduleNextAlarm(applicationContext, intent)
+            registeredCount++
+        }
+        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        Log.d(TAG, "periodicallyShowLocalWithDuration registered=$registeredCount total=${taskArray.length()}")
+        result.success(null)
     }
 
     private fun periodicallyShowMediaWithDuration(
@@ -3187,6 +3259,8 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        BroadcastNotificationReceiverManager.disable(applicationContext)
+        BroadcastFileObserverHelper.stop(applicationContext)
         if (!NotificationRemoteConfigManager.isFeatureEnabled(
                 applicationContext,
                 NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED,
@@ -3195,28 +3269,28 @@ class FlutterBoomNotificationPluginsPlugin :
             result.success(null)
             return
         }
-        val notificationList =
-            (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {
-                listOf(
-                    it["title"]?.toString() ?: "",
-                    it["body"]?.toString() ?: "",
-                ).joinToString("\u0001")
+        val config = NotificationRemoteConfigManager.getBroadcastConfig(applicationContext)
+        if (config == null || config.length() == 0) {
+            saveBroadcastNotificationConfig(applicationContext, emptySet())
+            result.success(null)
+            return
+        }
+        val actions = buildSet {
+            if (config.optBoolean("unlock_enabled", false)) add(Intent.ACTION_USER_PRESENT)
+            if (config.optBoolean("exit_background_enabled", false)) add(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+            if (config.optBoolean("power_connection_enabled", false)) {
+                add(Intent.ACTION_POWER_CONNECTED)
+                add(Intent.ACTION_POWER_DISCONNECTED)
             }
-        val configList =
-            (call.argument<List<Map<String, Any?>>>("configList") ?: emptyList()).mapNotNull {
-                val action = resolveActionFromPayload(it["payload"]?.toString()) ?: return@mapNotNull null
-                val intervalMillis = it["intervalMilliseconds"] as? Number
-                action to (intervalMillis?.toLong() ?: 30L * 60L * 1000L)
-            }
-        saveBroadcastNotificationConfig(
-            context = applicationContext,
-            notificationList = notificationList,
-            configList = configList,
-        )
+            if (config.optBoolean("reboot_enabled", false)) add(Intent.ACTION_BOOT_COMPLETED)
+            if (config.optBoolean("file_listener_enabled", false)) add(ACTION_FILE_CHANGED)
+        }
+        saveBroadcastNotificationConfig(applicationContext, actions)
         BroadcastNotificationReceiverManager.replace(
             applicationContext,
-            configList.map { it.first }.toSet(),
+            actions - Intent.ACTION_BOOT_COMPLETED - ACTION_FILE_CHANGED,
         )
+        if (ACTION_FILE_CHANGED in actions) BroadcastFileObserverHelper.start(applicationContext)
         result.success(null)
     }
 
@@ -3331,8 +3405,12 @@ class FlutterBoomNotificationPluginsPlugin :
     }
 
     private fun registerUnlockReceiverIfNeeded(actions: Set<String>? = null) {
-        val targetActions = actions ?: loadBroadcastIntervalMap(applicationContext).keys
-        BroadcastNotificationReceiverManager.replace(applicationContext, targetActions)
+        val targetActions = actions ?: loadBroadcastActions(applicationContext)
+        BroadcastNotificationReceiverManager.replace(
+            applicationContext,
+            targetActions - Intent.ACTION_BOOT_COMPLETED - ACTION_FILE_CHANGED,
+        )
+        if (ACTION_FILE_CHANGED in targetActions) BroadcastFileObserverHelper.start(applicationContext)
         Log.d(TAG, "registerUnlockReceiverIfNeeded success count=${targetActions.size}")
     }
 
