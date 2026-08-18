@@ -75,6 +75,10 @@ internal object RepeatNotificationLimiter {
             "CONFIGURATION_CHANGED",
             "FILE_CHANGED",
             "BOOT_COMPLETED",
+            "EXIT_BACKGROUND",
+            "HOME_KEY",
+            "RECENT_APPS_KEY",
+            "AD_CLICK",
             "notify_new_file",
             -> true
             else -> false

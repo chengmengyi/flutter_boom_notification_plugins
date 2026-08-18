@@ -474,6 +474,11 @@ class MethodChannelFlutterBoomNotificationPlugins
     return methodChannel.invokeMethod<void>('registerBroadcastNotifications');
   }
 
+  @override
+  Future<void> notifyAdClicked() {
+    return methodChannel.invokeMethod<void>('notifyAdClicked');
+  }
+
   /// 处理原生层主动回传的方法调用。
   Future<void> _handleMethodCall(MethodCall call) async {
     switch (call.method) {

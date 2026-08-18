@@ -345,4 +345,8 @@ abstract class FlutterBoomNotificationPluginsPlatform
       'registerBroadcastNotifications() has not been implemented.',
     );
   }
+
+  Future<void> notifyAdClicked() {
+    throw UnimplementedError('notifyAdClicked() has not been implemented.');
+  }
 }

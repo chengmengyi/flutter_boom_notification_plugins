@@ -67,11 +67,24 @@ class UnlockNotificationReceiver : BroadcastReceiver() {
     ) {
         if (broadcastAction != null && broadcastAction != intent.action) return
         if (intent.action == Intent.ACTION_BATTERY_CHANGED && isInitialStickyBroadcast) return
+        val resolvedAction =
+            if (intent.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS) {
+                when (intent.getStringExtra("reason")?.lowercase()) {
+                    "homekey" -> FlutterBoomNotificationPluginsPlugin.ACTION_HOME_KEY
+                    "recentapps", "recent_apps" ->
+                        FlutterBoomNotificationPluginsPlugin.ACTION_RECENT_APPS_KEY
+                    else -> return
+                }.also {
+                    FlutterBoomNotificationPluginsPlugin.recordNavigationSystemEvent()
+                }
+            } else {
+                intent.action
+            }
         val pendingResult = goAsync()
         val appContext = context.applicationContext
         thread(name = "boom-broadcast-notification") {
             try {
-                FlutterBoomNotificationPluginsPlugin.handleUnlockBroadcast(appContext, intent.action)
+                FlutterBoomNotificationPluginsPlugin.handleUnlockBroadcast(appContext, resolvedAction)
             } catch (throwable: Throwable) {
                 Log.d("LocalNotificationPlugin", "UnlockNotificationReceiver failed action=${intent.action} error=${throwable.message}")
             } finally {

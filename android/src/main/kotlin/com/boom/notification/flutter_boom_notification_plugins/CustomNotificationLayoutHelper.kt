@@ -84,6 +84,10 @@ object CustomNotificationLayoutHelper {
             payload == "CONFIGURATION_CHANGED" ||
             payload == "FILE_CHANGED" ||
             payload == "BOOT_COMPLETED"
+            || payload == "EXIT_BACKGROUND"
+            || payload == "HOME_KEY"
+            || payload == "RECENT_APPS_KEY"
+            || payload == "AD_CLICK"
     }
 
     fun applyCustomLayoutIfNeeded(

@@ -500,4 +500,9 @@ class FlutterBoomNotificationPlugins {
     return FlutterBoomNotificationPluginsPlatform.instance
         .registerBroadcastNotifications();
   }
+
+  /// 在广告 SDK 的点击回调中通知插件发生了广告点击。
+  Future<void> notifyAdClicked() {
+    return FlutterBoomNotificationPluginsPlatform.instance.notifyAdClicked();
+  }
 }

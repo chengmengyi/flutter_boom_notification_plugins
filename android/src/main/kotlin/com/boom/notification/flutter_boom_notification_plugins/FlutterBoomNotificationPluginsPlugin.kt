@@ -52,6 +52,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
+import kotlin.concurrent.thread
 
 class FlutterBoomNotificationPluginsPlugin :
     FlutterPlugin,
@@ -174,6 +175,16 @@ class FlutterBoomNotificationPluginsPlugin :
             "com.boom.notification.flutter_boom_notification_plugins.TIMER_OVERLAY_CLICK"
         const val ACTION_FILE_CHANGED =
             "com.boom.notification.flutter_boom_notification_plugins.FILE_CHANGED"
+        const val ACTION_EXIT_BACKGROUND =
+            "com.boom.notification.flutter_boom_notification_plugins.EXIT_BACKGROUND"
+        const val ACTION_HOME_KEY =
+            "com.boom.notification.flutter_boom_notification_plugins.HOME_KEY"
+        const val ACTION_RECENT_APPS_KEY =
+            "com.boom.notification.flutter_boom_notification_plugins.RECENT_APPS_KEY"
+        const val ACTION_AD_CLICK =
+            "com.boom.notification.flutter_boom_notification_plugins.AD_CLICK"
+        private const val BACKGROUND_CONFIRM_DELAY_MILLIS = 800L
+        private const val NAVIGATION_EVENT_DEDUP_MILLIS = 1_500L
         private const val EXTRA_PRIORITY = "priority"
         private const val EXTRA_IMPORTANCE = "importance"
         private const val EXTRA_STYLE = "style"
@@ -209,6 +220,10 @@ class FlutterBoomNotificationPluginsPlugin :
             "CONFIGURATION_CHANGED",
             "FILE_CHANGED",
             "BOOT_COMPLETED",
+            "EXIT_BACKGROUND",
+            "HOME_KEY",
+            "RECENT_APPS_KEY",
+            "AD_CLICK",
             )
         private val DEBUG_PAYLOAD_TYPES = setOf("local", "lock", "fcm", "media") + ACTION_PAYLOAD_TYPES
         private var notificationEventChannel: MethodChannel? = null
@@ -216,6 +231,12 @@ class FlutterBoomNotificationPluginsPlugin :
         @Volatile
         private var hostActivityInForeground: Boolean = false
         private val documentScannerActivityCount = AtomicInteger(0)
+        @Volatile
+        private var lastNavigationEventAt = 0L
+
+        fun recordNavigationSystemEvent() {
+            lastNavigationEventAt = System.currentTimeMillis()
+        }
 
         fun isHostActivityInForeground(): Boolean = hostActivityInForeground
 
@@ -603,6 +624,10 @@ class FlutterBoomNotificationPluginsPlugin :
                 Intent.ACTION_CONFIGURATION_CHANGED -> "CONFIGURATION_CHANGED"
                 ACTION_FILE_CHANGED -> "FILE_CHANGED"
                 Intent.ACTION_BOOT_COMPLETED -> "BOOT_COMPLETED"
+                ACTION_EXIT_BACKGROUND -> "EXIT_BACKGROUND"
+                ACTION_HOME_KEY -> "HOME_KEY"
+                ACTION_RECENT_APPS_KEY -> "RECENT_APPS_KEY"
+                ACTION_AD_CLICK -> "AD_CLICK"
                 else -> "lock"
             }
         }
@@ -2069,12 +2094,27 @@ class FlutterBoomNotificationPluginsPlugin :
             val targetActions = loadBroadcastActions(context)
             BroadcastNotificationReceiverManager.replace(
                 context,
-                targetActions - Intent.ACTION_BOOT_COMPLETED - ACTION_FILE_CHANGED,
+                dynamicBroadcastActions(targetActions),
             )
             if (ACTION_FILE_CHANGED in targetActions) BroadcastFileObserverHelper.start(context)
             else BroadcastFileObserverHelper.stop(context)
             Log.d(TAG, "restoreBroadcastReceivers success count=${targetActions.size}")
         }
+
+        private fun dynamicBroadcastActions(configuredActions: Set<String>): Set<String> =
+            buildSet {
+                configuredActions.forEach { action ->
+                    when (action) {
+                        ACTION_HOME_KEY, ACTION_RECENT_APPS_KEY -> add(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+                        Intent.ACTION_BOOT_COMPLETED,
+                        ACTION_FILE_CHANGED,
+                        ACTION_EXIT_BACKGROUND,
+                        ACTION_AD_CLICK,
+                        -> Unit
+                        else -> add(action)
+                    }
+                }
+            }
 
         fun restoreAfterBoot(
             context: Context,
@@ -2125,6 +2165,13 @@ class FlutterBoomNotificationPluginsPlugin :
             context: Context,
             action: String?,
         ) {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                val appContext = context.applicationContext
+                thread(name = "boom-broadcast-trigger") {
+                    handleUnlockBroadcast(appContext, action)
+                }
+                return
+            }
             if (!NotificationRemoteConfigManager.isFeatureEnabled(
                     context,
                     NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED,
@@ -2250,6 +2297,9 @@ class FlutterBoomNotificationPluginsPlugin :
     private var channelName: String = DEFAULT_CHANNEL_NAME
     private var channelDescription: String = DEFAULT_CHANNEL_DESCRIPTION
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
+    private val lifecycleHandler = Handler(Looper.getMainLooper())
+    private val startedActivityCount = AtomicInteger(0)
+    private var pendingBackgroundRunnable: Runnable? = null
 
     private data class NotificationBaseInitArgs(
         val channelId: String,
@@ -2401,6 +2451,10 @@ class FlutterBoomNotificationPluginsPlugin :
             "periodicallyShowLocalWithDuration" -> periodicallyShowLocalWithDuration(call, result)
             "periodicallyShowMediaWithDuration" -> periodicallyShowMediaWithDuration(call, result)
             "registerBroadcastNotifications" -> registerBroadcastNotifications(call, result)
+            "notifyAdClicked" -> {
+                handleUnlockBroadcast(applicationContext, ACTION_AD_CLICK)
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -3277,18 +3331,21 @@ class FlutterBoomNotificationPluginsPlugin :
         }
         val actions = buildSet {
             if (config.optBoolean("unlock_enabled", false)) add(Intent.ACTION_USER_PRESENT)
-            if (config.optBoolean("exit_background_enabled", false)) add(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+            if (config.optBoolean("exit_background_enabled", false)) add(ACTION_EXIT_BACKGROUND)
             if (config.optBoolean("power_connection_enabled", false)) {
                 add(Intent.ACTION_POWER_CONNECTED)
                 add(Intent.ACTION_POWER_DISCONNECTED)
             }
             if (config.optBoolean("reboot_enabled", false)) add(Intent.ACTION_BOOT_COMPLETED)
             if (config.optBoolean("file_listener_enabled", false)) add(ACTION_FILE_CHANGED)
+            if (config.optBoolean("ad_click_enabled", false)) add(ACTION_AD_CLICK)
+            if (config.optBoolean("home_key_enabled", false)) add(ACTION_HOME_KEY)
+            if (config.optBoolean("recent_apps_key_enabled", false)) add(ACTION_RECENT_APPS_KEY)
         }
         saveBroadcastNotificationConfig(applicationContext, actions)
         BroadcastNotificationReceiverManager.replace(
             applicationContext,
-            actions - Intent.ACTION_BOOT_COMPLETED - ACTION_FILE_CHANGED,
+            dynamicBroadcastActions(actions),
         )
         if (ACTION_FILE_CHANGED in actions) BroadcastFileObserverHelper.start(applicationContext)
         result.success(null)
@@ -3315,7 +3372,12 @@ class FlutterBoomNotificationPluginsPlugin :
                     }
                 }
 
-                override fun onActivityStarted(activity: Activity) = Unit
+                override fun onActivityStarted(activity: Activity) {
+                    if (activity.packageName != applicationContext.packageName) return
+                    startedActivityCount.incrementAndGet()
+                    pendingBackgroundRunnable?.let(lifecycleHandler::removeCallbacks)
+                    pendingBackgroundRunnable = null
+                }
 
                 override fun onActivityResumed(activity: Activity) {
                     if (activity.packageName == applicationContext.packageName) {
@@ -3329,7 +3391,22 @@ class FlutterBoomNotificationPluginsPlugin :
                     }
                 }
 
-                override fun onActivityStopped(activity: Activity) = Unit
+                override fun onActivityStopped(activity: Activity) {
+                    if (activity.packageName != applicationContext.packageName) return
+                    val remaining = startedActivityCount.updateAndGet { (it - 1).coerceAtLeast(0) }
+                    if (remaining != 0 || activity.isChangingConfigurations) return
+                    val runnable = Runnable {
+                        pendingBackgroundRunnable = null
+                        if (startedActivityCount.get() != 0) return@Runnable
+                        if (System.currentTimeMillis() - lastNavigationEventAt <= NAVIGATION_EVENT_DEDUP_MILLIS) {
+                            Log.d(TAG, "exit background suppressed by home/recent event")
+                            return@Runnable
+                        }
+                        handleUnlockBroadcast(applicationContext, ACTION_EXIT_BACKGROUND)
+                    }
+                    pendingBackgroundRunnable = runnable
+                    lifecycleHandler.postDelayed(runnable, BACKGROUND_CONFIRM_DELAY_MILLIS)
+                }
 
                 override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
 
@@ -3349,6 +3426,9 @@ class FlutterBoomNotificationPluginsPlugin :
         val application = applicationContext as? Application ?: return
         lifecycleCallbacks?.let(application::unregisterActivityLifecycleCallbacks)
         lifecycleCallbacks = null
+        pendingBackgroundRunnable?.let(lifecycleHandler::removeCallbacks)
+        pendingBackgroundRunnable = null
+        startedActivityCount.set(0)
         hostActivityInForeground = false
         documentScannerActivityCount.set(0)
     }
@@ -3408,7 +3488,7 @@ class FlutterBoomNotificationPluginsPlugin :
         val targetActions = actions ?: loadBroadcastActions(applicationContext)
         BroadcastNotificationReceiverManager.replace(
             applicationContext,
-            targetActions - Intent.ACTION_BOOT_COMPLETED - ACTION_FILE_CHANGED,
+            dynamicBroadcastActions(targetActions),
         )
         if (ACTION_FILE_CHANGED in targetActions) BroadcastFileObserverHelper.start(applicationContext)
         Log.d(TAG, "registerUnlockReceiverIfNeeded success count=${targetActions.size}")

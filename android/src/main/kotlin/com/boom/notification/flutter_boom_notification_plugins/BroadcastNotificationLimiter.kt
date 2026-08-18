@@ -25,6 +25,10 @@ internal object BroadcastNotificationLimiter {
             payload == "CLOSE_SYSTEM_DIALOGS" ||
             payload == "FILE_CHANGED" ||
             payload == "BOOT_COMPLETED"
+            || payload == "EXIT_BACKGROUND"
+            || payload == "HOME_KEY"
+            || payload == "RECENT_APPS_KEY"
+            || payload == "AD_CLICK"
 
     fun beginShowAttempt(context: Context, payload: String?): Boolean {
         if (!isBroadcastPayload(payload)) return true
