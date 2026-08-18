@@ -382,8 +382,12 @@ class B16NotificationHepPqnvze {
 
   void _b16InitializeListenersKqmwze() {
     FlutterBoomNotificationPlugins.instance.setListeners(
-      onNotificationClicked: (LocalNotificationEvent b16EventQxnvza) {},
-      onNotificationDisplayed: (LocalNotificationEvent b16EventVqntza) {},
+      onNotificationClicked: (LocalNotificationEvent b16EventQxnvza) {
+        print("kk===onNotificationClicked==${b16EventQxnvza.payload}");
+      },
+      onNotificationDisplayed: (LocalNotificationEvent b16EventVqntza) {
+        print("kk===onNotificationDisplayed==${b16EventVqntza.payload}");
+      },
       onTimerOverlayClicked: (TimerOverlayClickEvent b16EventPqnvze) {},
       onProcessingOverlayClicked: () {},
     );

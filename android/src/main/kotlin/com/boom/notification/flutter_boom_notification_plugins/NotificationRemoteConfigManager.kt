@@ -134,6 +134,42 @@ internal class NotificationRemoteConfigManager(
         }
     }
 
+    /** Refresh never reads cache: remote success, otherwise this call's defaultConfig. */
+    fun resolveForRefresh(
+        config: Map<*, *>,
+        onResolved: (JSONObject) -> Unit,
+        onFailure: () -> Unit,
+    ) {
+        scope.launch {
+            val defaultConfig = parseConfigObject(config["defaultConfig"] as? String)
+            val resolvedConfig =
+                if (config["request"] !is Map<*, *>) {
+                    defaultConfig
+                } else {
+                    try {
+                        requestAndParse(config).also { remoteConfig ->
+                            preferences.edit().putString(KEY_CACHED_CONFIG, remoteConfig.toString()).apply()
+                            debugLog("Refreshed remote config saved to local cache\n$remoteConfig")
+                        }
+                    } catch (error: Exception) {
+                        logRemoteFailure(error)
+                        preferences.edit().remove(KEY_CACHED_CONFIG).apply()
+                        debugLog("Refresh failed; old-language remote cache removed")
+                        debugLog("Refresh fallback source=defaultConfig\n${config["defaultConfig"]}")
+                        defaultConfig
+                    }
+                }
+            mainHandler.post {
+                if (resolvedConfig == null) {
+                    onFailure()
+                } else {
+                    activate(resolvedConfig)
+                    onResolved(resolvedConfig)
+                }
+            }
+        }
+    }
+
     private fun logRemoteFailure(error: Exception) {
         // 远程配置是增强能力；任何请求、状态、JSON、提取或映射异常均进入本地/default 兜底。
         if (isDebuggable) {

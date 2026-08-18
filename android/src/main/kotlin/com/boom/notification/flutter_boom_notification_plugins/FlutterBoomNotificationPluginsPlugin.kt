@@ -53,6 +53,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 import kotlin.concurrent.thread
+import org.json.JSONObject
 
 class FlutterBoomNotificationPluginsPlugin :
     FlutterPlugin,
@@ -203,6 +204,8 @@ class FlutterBoomNotificationPluginsPlugin :
         private const val MEDIA_SCHEDULE_BASE_ID = 19009
         private const val SCHEDULE_ID_RANGE_SIZE = 10_000
         private const val EXTRA_CONFIG_DRIVEN_MEDIA = "configDrivenMedia"
+        private const val EXTRA_CONFIG_DRIVEN_LOCAL = "configDrivenLocal"
+        private const val EXTRA_CONFIG_TASK_INDEX = "configTaskIndex"
         private const val GALLERY_IMAGE_NOTIFICATION_BASE_ID = 10007
         private const val MEDIA_UNIQUE_TAG = "media_notification_unique"
         private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
@@ -463,6 +466,13 @@ class FlutterBoomNotificationPluginsPlugin :
             }
             if (intent.getBooleanExtra(EXTRA_CONFIG_DRIVEN_MEDIA, false)) {
                 showLocalTriggeredMediaNotification(context, "configured_media_schedule")
+                return
+            }
+            if (intent.getBooleanExtra(EXTRA_CONFIG_DRIVEN_LOCAL, false)) {
+                showConfiguredLocalNotification(
+                    context,
+                    intent.getIntExtra(EXTRA_CONFIG_TASK_INDEX, -1),
+                )
                 return
             }
             val firstDelayMinutes = intent.getLongExtra(EXTRA_FIRST_DELAY_MINUTES, 0L)
@@ -1999,6 +2009,36 @@ class FlutterBoomNotificationPluginsPlugin :
             return true
         }
 
+        fun showConfiguredLocalNotification(context: Context, taskIndex: Int) {
+            if (!isNotificationTypeEnabled(context, "local") || taskIndex < 0) return
+            val task = NotificationRemoteConfigManager.getScheduledNotificationArray(context)
+                ?.optJSONObject(taskIndex) ?: return
+            if (!RepeatNotificationLimiter.hasElapsedFirstDelay(
+                    context,
+                    task.optLong("first_delay", 0L).coerceAtLeast(0L),
+                )
+            ) return
+            val copyPool = task.optJSONArray("copy_pool") ?: return
+            if (copyPool.length() == 0) return
+            val copy = copyPool.optJSONObject(Random.nextInt(copyPool.length())) ?: return
+            val channelName = task.optString("channel_name").trim().ifBlank { "local_notifications" }
+            showNotification(
+                context = context,
+                id = LocalNotificationScheduler.nextDisplayId(context),
+                baseId = LOCAL_SCHEDULE_BASE_ID,
+                title = copy.optString("title"),
+                body = copy.optString("body"),
+                payload = "local",
+                debugPayload = "local",
+                channelId = "${channelName}_id",
+                channelName = channelName,
+                channelDescription = "local notifications desc",
+                priority = NotificationCompat.PRIORITY_MAX,
+                importance = NotificationManager.IMPORTANCE_MAX,
+                customLayoutImageValue = copy.optString("image"),
+            )
+        }
+
         fun saveGalleryImageNotificationConfig(
             context: Context,
             title: String?,
@@ -2336,6 +2376,7 @@ class FlutterBoomNotificationPluginsPlugin :
     private var channelName: String = DEFAULT_CHANNEL_NAME
     private var channelDescription: String = DEFAULT_CHANNEL_DESCRIPTION
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
+    private var lastNotificationBaseInitArgs: NotificationBaseInitArgs? = null
     private val lifecycleHandler = Handler(Looper.getMainLooper())
     private val startedActivityCount = AtomicInteger(0)
     private var pendingBackgroundRunnable: Runnable? = null
@@ -2484,6 +2525,7 @@ class FlutterBoomNotificationPluginsPlugin :
                         ?: mapOf("didNotificationLaunchApp" to false),
                 )
             "initNotification" -> initNotification(call, result)
+            "refreshNotificationConfig" -> refreshNotificationConfig(call, result)
             "subscribeToTopic" -> subscribeToTopic(call, result)
             "showPersistentShortcutNotification" -> showPersistentShortcutNotification(call, result)
             "show" -> show(call, result)
@@ -2901,6 +2943,7 @@ class FlutterBoomNotificationPluginsPlugin :
                 showMedia = call.argument<Boolean>("showMedia") ?: true,
                 customLayout = call.argument<Map<String, Any?>>("customLayout"),
             )
+        lastNotificationBaseInitArgs = baseInitArgs
         notificationRemoteConfigManager.resolveForInitialization(
             config = notificationInitConfig,
             onResolved = { resolvedConfig ->
@@ -2919,6 +2962,117 @@ class FlutterBoomNotificationPluginsPlugin :
             },
         )
     }
+
+    private fun refreshNotificationConfig(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val refreshConfig = call.argument<Map<String, Any?>>("config")
+        if (refreshConfig == null) {
+            Log.d(TAG, "refreshNotificationConfig skipped invalid config")
+            result.success(false)
+            return
+        }
+        val baseInitArgs = lastNotificationBaseInitArgs
+        if (baseInitArgs == null) {
+            Log.d(TAG, "refreshNotificationConfig skipped before initNotification")
+            result.success(false)
+            return
+        }
+        val previousConfig = notificationRemoteConfigManager.currentConfig()
+        notificationRemoteConfigManager.resolveForRefresh(
+            config = refreshConfig,
+            onResolved = { resolvedConfig ->
+                runCatching {
+                    applyNotificationMasterSwitch(
+                        enabled = resolvedConfig.optBoolean("enabled", false),
+                        args = baseInitArgs,
+                    )
+                    if (resolvedConfig.optBoolean("enabled", false)) {
+                        registerBroadcastNotifications(
+                            MethodCall("registerBroadcastNotifications", null),
+                            silentResult(),
+                        )
+                        if (scheduleSignature(previousConfig, "scheduled_enabled", "scheduled_notification_arr") !=
+                            scheduleSignature(resolvedConfig, "scheduled_enabled", "scheduled_notification_arr")
+                        ) {
+                            periodicallyShowLocalWithDuration(
+                                MethodCall("periodicallyShowLocalWithDuration", null),
+                                silentResult(),
+                            )
+                        }
+                        if (scheduleSignature(previousConfig, "media_enabled", "media_notification_arr") !=
+                            scheduleSignature(resolvedConfig, "media_enabled", "media_notification_arr")
+                        ) {
+                            refreshMediaSchedulesFromStoredConfig()
+                        }
+                    }
+                }.onSuccess {
+                    result.success(true)
+                }.onFailure {
+                    Log.d(TAG, "refreshNotificationConfig apply failed error=${it.message}")
+                    result.success(false)
+                }
+            },
+            onFailure = {
+                Log.d(TAG, "refreshNotificationConfig failed invalid defaultConfig")
+                result.success(false)
+            },
+        )
+    }
+
+    private fun scheduleSignature(
+        config: JSONObject?,
+        enabledKey: String,
+        arrayKey: String,
+    ): String {
+        if (config == null) return "missing"
+        val array = config.optJSONArray(arrayKey)
+        val intervals = buildList {
+            if (array != null) {
+                for (index in 0 until array.length()) {
+                    add(array.optJSONObject(index)?.optLong("interval", 0L) ?: Long.MIN_VALUE)
+                }
+            }
+        }
+        return "${config.optBoolean(enabledKey, false)}:${intervals.joinToString(",")}" 
+    }
+
+    private fun refreshMediaSchedulesFromStoredConfig() {
+        val reflection = extractMediaReflectionConfig(applicationContext) ?: return
+        val args = mapOf(
+            "mediaBackgroundImageName" to prefs(applicationContext).getString(KEY_MEDIA_BACKGROUND_IMAGE, null),
+            "reflectionConfig" to mapOf(
+                "secret" to reflection.secret,
+                "mediaSessionClass" to reflection.mediaSessionClass,
+                "mediaSessionTokenClass" to reflection.mediaSessionTokenClass,
+                "mediaSessionTag" to reflection.mediaSessionTag,
+                "playbackStateClass" to reflection.playbackStateClass,
+                "playbackStateBuilderClass" to reflection.playbackStateBuilderClass,
+                "mediaStyleClass" to reflection.mediaStyleClass,
+                "setFlagsMethod" to reflection.setFlagsMethod,
+                "setActiveMethod" to reflection.setActiveMethod,
+                "setPlaybackStateMethod" to reflection.setPlaybackStateMethod,
+                "getSessionTokenMethod" to reflection.getSessionTokenMethod,
+                "setStateMethod" to reflection.setStateMethod,
+                "buildMethod" to reflection.buildMethod,
+                "setMediaSessionMethod" to reflection.setMediaSessionMethod,
+            ),
+        )
+        periodicallyShowMediaWithDuration(
+            MethodCall("periodicallyShowMediaWithDuration", args),
+            silentResult(),
+        )
+    }
+
+    private fun silentResult(): Result =
+        object : Result {
+            override fun success(result: Any?) = Unit
+            override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                Log.d(TAG, "config refresh sync failed code=$errorCode message=$errorMessage")
+            }
+            override fun notImplemented() = Unit
+        }
 
     private fun applyNotificationMasterSwitch(
         enabled: Boolean,
@@ -3164,21 +3318,6 @@ class FlutterBoomNotificationPluginsPlugin :
                 continue
             }
             val channelName = task.optString("channel_name").trim().ifBlank { "local_notifications" }
-            val notificationList = ArrayList<String>()
-            val copyPool = task.optJSONArray("copy_pool")
-            if (copyPool != null) {
-                for (copyIndex in 0 until copyPool.length()) {
-                    val copy = copyPool.optJSONObject(copyIndex) ?: continue
-                    notificationList.add(
-                        listOf(
-                            copy.optString("title"),
-                            copy.optString("body"),
-                            "local",
-                            copy.optString("image"),
-                        ).joinToString("\u0001"),
-                    )
-                }
-            }
             val intervalMillis =
                 if (intervalMinutes >= Long.MAX_VALUE / 60_000L) Long.MAX_VALUE
                 else intervalMinutes * 60_000L
@@ -3192,8 +3331,8 @@ class FlutterBoomNotificationPluginsPlugin :
                 putExtra(EXTRA_PRIORITY, NotificationCompat.PRIORITY_MAX)
                 putExtra(EXTRA_IMPORTANCE, NotificationManager.IMPORTANCE_MAX)
                 putExtra(EXTRA_REPEAT_INTERVAL, intervalMillis)
-                putExtra(EXTRA_FIRST_DELAY_MINUTES, task.optLong("first_delay", 0L).coerceAtLeast(0L))
-                putStringArrayListExtra(EXTRA_NOTIFICATION_LIST, notificationList)
+                putExtra(EXTRA_CONFIG_DRIVEN_LOCAL, true)
+                putExtra(EXTRA_CONFIG_TASK_INDEX, index)
                 putExtra("localScheduleId", internalScheduleId)
             }
             scheduleNextAlarm(applicationContext, intent)

@@ -386,6 +386,21 @@ class MethodChannelFlutterBoomNotificationPlugins
     return result ?? false;
   }
 
+  @override
+  Future<bool> refreshNotificationConfig({
+    required Map<String, Object?> config,
+  }) async {
+    try {
+      final result = await methodChannel.invokeMethod<bool>(
+        'refreshNotificationConfig',
+        <String, Object?>{'config': config},
+      );
+      return result ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 通过原生通道显示常驻快捷通知。
   @override
   Future<void> showPersistentShortcutNotification({

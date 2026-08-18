@@ -286,6 +286,14 @@ abstract class FlutterBoomNotificationPluginsPlatform
     throw UnimplementedError('initNotification() has not been implemented.');
   }
 
+  Future<bool> refreshNotificationConfig({
+    required Map<String, Object?> config,
+  }) {
+    throw UnimplementedError(
+      'refreshNotificationConfig() has not been implemented.',
+    );
+  }
+
   /// 显示常驻快捷入口通知。
   Future<void> showPersistentShortcutNotification({
     required String homeText,

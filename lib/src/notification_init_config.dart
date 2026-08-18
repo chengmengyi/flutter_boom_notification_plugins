@@ -52,18 +52,18 @@ class NotificationConfigResponseRule {
 class NotificationInitConfig {
   const NotificationInitConfig({
     required this.defaultConfig,
-    this.request,
+    required this.request,
+    required this.fieldMapping,
     this.responseRule = const NotificationConfigResponseRule(),
-    this.fieldMapping = const <String, String>{},
   });
 
   /// 标准字段格式的 data JSON，不包含 code、msg、data 外层。
   final String defaultConfig;
-  final NotificationConfigRequest? request;
+  final NotificationConfigRequest request;
   final NotificationConfigResponseRule responseRule;
 
   /// 标准字段名到接口实际字段名的映射；映射会递归应用到对象和数组。
-  final Map<String, String> fieldMapping;
+  final Map<String, dynamic> fieldMapping;
 
   Map<String, Object?> toMap() => <String, Object?>{
     'defaultConfig': defaultConfig,

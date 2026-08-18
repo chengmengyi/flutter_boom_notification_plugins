@@ -395,6 +395,14 @@ class FlutterBoomNotificationPlugins {
     );
   }
 
+  /// 语言等运行时条件变化后重新请求并刷新通知配置。
+  Future<bool> refreshNotificationConfig({
+    required NotificationInitConfig config,
+  }) {
+    return FlutterBoomNotificationPluginsPlatform.instance
+        .refreshNotificationConfig(config: config.toMap());
+  }
+
   /// 显示常驻快捷入口通知。
   Future<void> showPersistentShortcutNotification({
     required String homeText,
