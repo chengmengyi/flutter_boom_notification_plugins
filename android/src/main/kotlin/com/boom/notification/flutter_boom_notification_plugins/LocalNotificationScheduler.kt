@@ -122,6 +122,30 @@ object LocalNotificationScheduler {
         Log.d(TAG, "clearAll count=${snapshot.size}")
     }
 
+    fun clearScheduleRange(
+        context: Context,
+        range: IntRange,
+    ) {
+        val appContext = context.applicationContext
+        val selected = synchronized(lock) {
+            readSchedules(appContext).values.filter { it.id in range }
+        }
+        val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        selected.forEach { schedule ->
+            TimerNotificationWorkManager.cancel(appContext, schedule.id)
+            FixedTimerAlarmManager.cancel(appContext, schedule.id)
+            val pendingIntent = createPendingIntent(appContext, schedule)
+            alarmManager?.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+        synchronized(lock) {
+            val schedules = readSchedules(appContext)
+            selected.forEach { schedules.remove(it.id) }
+            writeSchedules(appContext, schedules)
+        }
+        Log.d(TAG, "clearScheduleRange range=$range count=${selected.size}")
+    }
+
     fun timerWorkConfigs(context: Context): List<TimerWorkConfig> =
         synchronized(lock) {
             val appContext = context.applicationContext

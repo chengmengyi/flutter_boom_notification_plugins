@@ -446,24 +446,12 @@ class MethodChannelFlutterBoomNotificationPlugins
   /// 通过原生通道按时间间隔循环展示媒体通知。
   @override
   Future<void> periodicallyShowMediaWithDuration({
-    required int id,
-    String? title,
-    String? body,
-    Duration repeatDurationInterval = const Duration(minutes: 30),
     String? mediaBackgroundImageName,
-    Map<String, Object?>? notificationDetails,
-    required List<Map<String, Object?>> notificationList,
     required Map<String, Object?> reflectionConfig,
   }) {
     return methodChannel
         .invokeMethod<void>('periodicallyShowMediaWithDuration', {
-          'id': id,
-          'title': title,
-          'body': body,
           'mediaBackgroundImageName': mediaBackgroundImageName,
-          'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
-          'notificationDetails': notificationDetails,
-          'notificationList': notificationList,
           'reflectionConfig': reflectionConfig,
         });
   }

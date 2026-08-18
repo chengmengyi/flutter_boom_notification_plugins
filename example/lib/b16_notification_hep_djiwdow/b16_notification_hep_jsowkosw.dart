@@ -58,12 +58,7 @@ class B16NotificationHepPqnvze {
       return;
     }
     FlutterBoomNotificationPlugins.instance.updateShowMediaTag(showMedia: true);
-    final bool b16ReplaceExistingKqmwze = true;
     FlutterBoomNotificationPlugins.instance.periodicallyShowMediaWithDuration(
-      id: 9010,
-      repeatDurationInterval: _b16NotificationIntervalPqnvze(),
-      title: 'PDF Edit',
-      body: 'PDF Edit Body',
       reflectionConfig: MediaReflectionConfig(
         secret: "B16secretKeyKhuwi",
         mediaSessionClass:
@@ -90,19 +85,6 @@ class B16NotificationHepPqnvze {
         setMediaSessionMethod:
             "v1:/TS8GKpyYq0gTAfZ:YBb0GAO+JRvzHcB/AwNsdtT232ovuAC0A0HJhblmAw==",
       ),
-      notificationDetails: AndroidNotificationDetails(
-        'pdf_media_notification_channel',
-        'pdf_media_notification_channel_name',
-        channelDescription: 'pdf media notification desc',
-        priority: Priority.high,
-        importance: Importance.high,
-        replaceExisting: b16ReplaceExistingKqmwze,
-        styleInformation: const MediaStyleInformation(
-          image: 'b16_notification_logo_hwdiw',
-        ),
-      ),
-      notificationList:
-          B16NotificationContentHepHqmwza.b16BuildContentsKqmwze(),
       mediaBackgroundImageName: 'b16_large_notification_image_djiwjdw',
     );
   }
@@ -126,10 +108,6 @@ class B16NotificationHepPqnvze {
     FlutterBoomNotificationPlugins.instance.periodicallyShowLocalWithDuration();
   }
 
-  Duration _b16NotificationIntervalPqnvze() {
-    return const Duration(seconds: 30);
-  }
-
   void b16UpdateNewFileTextPqnvze() {
     FlutterBoomNotificationPlugins.instance.setGalleryImageNotificationInfo(
       title: 'You have a new file.',
@@ -148,7 +126,7 @@ class B16NotificationHepPqnvze {
     "fcm_enabled": true,
     "scheduled_enabled": true,
     "broadcast_enabled": true,
-    "media_enabled": false,
+    "media_enabled": true,
     "persistent_enabled": true,
     "floating_window_enabled": false,
     "fcm_topic_arr": [
@@ -216,22 +194,44 @@ class B16NotificationHepPqnvze {
     },
     "media_notification_arr": [
       {
-        "channel_name": "media_reminder",
-        "first_delay": 60,
-        "interval": 120,
+        "channel_name": "media_reminder111",
+        "first_delay": 0,
+        "interval": 0,
         "copy_pool": [
           {
-            "title": "File size reduced",
+            "title": "m1File size reduced",
             "body": "Your tiny PDF is ready to view！",
             "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
           },
           {
-            "title": "Need to sign a document?",
+            "title": "m1Need to sign a document?",
             "body": "Add your signature to any PDF in just a few taps.",
             "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
           },
           {
-            "title": "Convert files on the go",
+            "title": "m1Convert files on the go",
+            "body": "Turn images, Word docs, or spreadsheets into PDFs quickly.",
+            "image": "https://pbs.twimg.com/media/HO8SB6AbsAAhImD?format=jpg&name=large"
+          }
+        ]
+      },
+      {
+        "channel_name": "media_reminder222",
+        "first_delay": 0,
+        "interval": 0,
+        "copy_pool": [
+          {
+            "title": "m2File size reduced",
+            "body": "Your tiny PDF is ready to view！",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "m2Need to sign a document?",
+            "body": "Add your signature to any PDF in just a few taps.",
+            "image": "https://pbs.twimg.com/media/HO8SB6ibQAAEFud?format=jpg&name=large"
+          },
+          {
+            "title": "m2Convert files on the go",
             "body": "Turn images, Word docs, or spreadsheets into PDFs quickly.",
             "image": "https://pbs.twimg.com/media/HO8SB6AbsAAhImD?format=jpg&name=large"
           }

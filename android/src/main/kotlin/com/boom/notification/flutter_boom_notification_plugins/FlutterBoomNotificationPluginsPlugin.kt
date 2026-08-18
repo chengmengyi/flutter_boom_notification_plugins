@@ -199,6 +199,10 @@ class FlutterBoomNotificationPluginsPlugin :
         private const val FCM_BASE_ID = 10003
         private const val SHORTCUT_NOTIFICATION_ID = 10004
         private const val MEDIA_UNIQUE_NOTIFICATION_ID = 10005
+        private const val LOCAL_SCHEDULE_BASE_ID = 9009
+        private const val MEDIA_SCHEDULE_BASE_ID = 19009
+        private const val SCHEDULE_ID_RANGE_SIZE = 10_000
+        private const val EXTRA_CONFIG_DRIVEN_MEDIA = "configDrivenMedia"
         private const val GALLERY_IMAGE_NOTIFICATION_BASE_ID = 10007
         private const val MEDIA_UNIQUE_TAG = "media_notification_unique"
         private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
@@ -455,6 +459,10 @@ class FlutterBoomNotificationPluginsPlugin :
         fun showNotificationFromIntent(context: Context, intent: Intent) {
             if (isNotificationBlocked(context)) {
                 Log.d(TAG, "showNotificationFromIntent blocked by manufacturer")
+                return
+            }
+            if (intent.getBooleanExtra(EXTRA_CONFIG_DRIVEN_MEDIA, false)) {
+                showLocalTriggeredMediaNotification(context, "configured_media_schedule")
                 return
             }
             val firstDelayMinutes = intent.getLongExtra(EXTRA_FIRST_DELAY_MINUTES, 0L)
@@ -889,12 +897,16 @@ class FlutterBoomNotificationPluginsPlugin :
             importance: Int = NotificationManager.IMPORTANCE_MAX,
             beautyTemplate: FcmTemplate? = null,
             mediaImage: String? = null,
+            mediaFallbackImage: String? = null,
             customLayoutImageValue: String? = null,
             debugActionText: String? = null,
             replaceExistingMedia: Boolean = false,
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
+            mediaFirstDelayMinutes: Long? = null,
+            mediaIntervalMinutes: Long? = null,
         ) {
+            var mediaAttemptStarted = false
             var broadcastAttemptStarted = false
             if (!isNotificationTypeEnabled(context, payload)) {
                 Log.d(TAG, "showNotification skipped by type switch payload=$payload")
@@ -987,6 +999,7 @@ class FlutterBoomNotificationPluginsPlugin :
                             body = body,
                             contentIntent = clickPendingIntent,
                             mediaImage = mediaImage,
+                            mediaFallbackImage = mediaFallbackImage,
                         ) ?: return
                     } else {
                         NotificationCompat.Builder(context, runtimeChannelId)
@@ -1040,11 +1053,30 @@ class FlutterBoomNotificationPluginsPlugin :
                     }
                     broadcastAttemptStarted = true
                 }
+                if (payload == "media" && mediaFirstDelayMinutes != null && mediaIntervalMinutes != null) {
+                    if (!MediaNotificationLimiter.beginShowAttempt(
+                            context,
+                            mediaFirstDelayMinutes,
+                            mediaIntervalMinutes,
+                        )
+                    ) {
+                        if (broadcastAttemptStarted) {
+                            BroadcastNotificationLimiter.cancelShowAttempt(payload)
+                            broadcastAttemptStarted = false
+                        }
+                        return
+                    }
+                    mediaAttemptStarted = true
+                }
                 if (RepeatNotificationLimiter.isRepeatNotification(payload)) {
                     if (!RepeatNotificationLimiter.beginShowAttempt(context, payload)) {
                         if (broadcastAttemptStarted) {
                             BroadcastNotificationLimiter.cancelShowAttempt(payload)
                             broadcastAttemptStarted = false
+                        }
+                        if (mediaAttemptStarted) {
+                            MediaNotificationLimiter.cancelShowAttempt()
+                            mediaAttemptStarted = false
                         }
                         return
                     }
@@ -1079,6 +1111,10 @@ class FlutterBoomNotificationPluginsPlugin :
                     BroadcastNotificationLimiter.recordShown(context, payload)
                     broadcastAttemptStarted = false
                 }
+                if (mediaAttemptStarted) {
+                    MediaNotificationLimiter.recordShown(context)
+                    mediaAttemptStarted = false
+                }
                 if (dispatchDisplayedAfterNotify) {
                     NativePushReporter.reportDisplayed(
                         context,
@@ -1100,6 +1136,9 @@ class FlutterBoomNotificationPluginsPlugin :
                 if (broadcastAttemptStarted) {
                     BroadcastNotificationLimiter.cancelShowAttempt(payload)
                 }
+                if (mediaAttemptStarted) {
+                    MediaNotificationLimiter.cancelShowAttempt()
+                }
                 if (repeatAttemptStarted) {
                     RepeatNotificationLimiter.cancelShowAttempt(payload)
                 }
@@ -1114,8 +1153,9 @@ class FlutterBoomNotificationPluginsPlugin :
             body: String?,
             contentIntent: PendingIntent?,
             mediaImage: String?,
+            mediaFallbackImage: String?,
         ): NotificationCompat.Builder? {
-            val bitmap = resolveMediaBitmap(context, mediaImage)
+            val bitmap = resolveMediaBitmap(context, mediaImage, mediaFallbackImage)
             val builder =
                 NotificationCompat.Builder(context, channelId)
                     .setSmallIcon(resolveSmallIcon(context))
@@ -1279,19 +1319,21 @@ class FlutterBoomNotificationPluginsPlugin :
         private fun resolveMediaBitmap(
             context: Context,
             mediaImage: String?,
+            mediaFallbackImage: String?,
         ): Bitmap? {
             return if (!mediaImage.isNullOrBlank() && mediaImage.startsWith("http")) {
                 loadNotificationBitmap(context, mediaImage)
+                    ?: resolveLocalMediaBitmap(context, mediaFallbackImage)
             } else {
-                val resolvedImageName =
-                    mediaImage?.takeUnless { it.isBlank() } ?: "logo"
-                val imageResId = resolveNamedResourceId(context, resolvedImageName)
-                if (imageResId != null) {
-                    BitmapFactory.decodeResource(context.resources, imageResId)
-                } else {
-                    null
-                }
+                resolveLocalMediaBitmap(context, mediaImage)
+                    ?: resolveLocalMediaBitmap(context, mediaFallbackImage)
             }
+        }
+
+        private fun resolveLocalMediaBitmap(context: Context, imageName: String?): Bitmap? {
+            val resolvedImageName = imageName?.takeUnless { it.isBlank() } ?: return null
+            val imageResId = resolveNamedResourceId(context, resolvedImageName) ?: return null
+            return BitmapFactory.decodeResource(context.resources, imageResId)
         }
 
         private fun resolveDefaultMediaLargeIcon(context: Context): Bitmap? {
@@ -1914,29 +1956,23 @@ class FlutterBoomNotificationPluginsPlugin :
                 return false
             }
             val sharedPrefs = prefs(context)
-            val rawList =
-                sharedPrefs.getStringSet(KEY_MEDIA_NOTIFICATION_LIST, emptySet())?.toList()
-                    ?: emptyList()
-            if (rawList.isEmpty()) {
-                Log.d(TAG, "showLocalTriggeredMediaNotification skipped empty reason=$reason")
+            val mediaArray = NotificationRemoteConfigManager.getMediaNotificationArray(context)
+            if (mediaArray == null || mediaArray.length() == 0) {
+                Log.d(TAG, "showLocalTriggeredMediaNotification skipped empty media_notification_arr reason=$reason")
                 return false
             }
-            val raw = rawList[Random.nextInt(rawList.size)]
-            val parts = raw.split("\u0001")
-            val title = parts.getOrNull(0)
-            val body = parts.getOrNull(1)
-            val channelId =
-                sharedPrefs.getString(KEY_MEDIA_CHANNEL_ID, DEFAULT_CHANNEL_ID)
-                    ?: DEFAULT_CHANNEL_ID
-            val channelName =
-                sharedPrefs.getString(KEY_MEDIA_CHANNEL_NAME, DEFAULT_CHANNEL_NAME)
-                    ?: DEFAULT_CHANNEL_NAME
-            val channelDescription =
-                sharedPrefs.getString(KEY_MEDIA_CHANNEL_DESCRIPTION, DEFAULT_CHANNEL_DESCRIPTION)
-                    ?: DEFAULT_CHANNEL_DESCRIPTION
-            val mediaImage =
-                sharedPrefs.getString(KEY_MEDIA_STYLE_IMAGE, null)
-                    ?: sharedPrefs.getString(KEY_MEDIA_BACKGROUND_IMAGE, null)
+            val selectedConfig = mediaArray.optJSONObject(Random.nextInt(mediaArray.length())) ?: return false
+            val copyPool = selectedConfig.optJSONArray("copy_pool")
+            if (copyPool == null || copyPool.length() == 0) {
+                Log.d(TAG, "showLocalTriggeredMediaNotification skipped selected copy_pool empty reason=$reason")
+                return false
+            }
+            val copy = copyPool.optJSONObject(Random.nextInt(copyPool.length())) ?: return false
+            val title = copy.optString("title")
+            val body = copy.optString("body")
+            val mediaImage = copy.optString("image")
+            val fallbackImage = sharedPrefs.getString(KEY_MEDIA_BACKGROUND_IMAGE, null)
+            val channelName = selectedConfig.optString("channel_name").trim().ifBlank { DEFAULT_CHANNEL_NAME }
             val displayId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             showNotification(
                 context = context,
@@ -1946,15 +1982,18 @@ class FlutterBoomNotificationPluginsPlugin :
                 body = body,
                 payload = "media",
                 debugPayload = "media",
-                channelId = channelId,
+                channelId = "${channelName}_id",
                 channelName = channelName,
-                channelDescription = channelDescription,
-                priority = sharedPrefs.getInt(KEY_MEDIA_PRIORITY, NotificationCompat.PRIORITY_HIGH),
-                importance = sharedPrefs.getInt(KEY_MEDIA_IMPORTANCE, NotificationManager.IMPORTANCE_HIGH),
+                channelDescription = "media notifications desc",
+                priority = NotificationCompat.PRIORITY_HIGH,
+                importance = NotificationManager.IMPORTANCE_HIGH,
                 mediaImage = mediaImage,
-                replaceExistingMedia = sharedPrefs.getBoolean(KEY_MEDIA_REPLACE_EXISTING, true),
+                mediaFallbackImage = fallbackImage,
+                replaceExistingMedia = true,
                 recordDisplayedBeforePermission = false,
                 dispatchDisplayedAfterNotify = true,
+                mediaFirstDelayMinutes = selectedConfig.optLong("first_delay", 0L).coerceAtLeast(0L),
+                mediaIntervalMinutes = selectedConfig.optLong("interval", 0L).coerceAtLeast(0L),
             )
             Log.d(TAG, "showLocalTriggeredMediaNotification success reason=$reason title=$title")
             return true
@@ -3101,7 +3140,10 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        LocalNotificationScheduler.clearAll(applicationContext)
+        LocalNotificationScheduler.clearScheduleRange(
+            applicationContext,
+            LOCAL_SCHEDULE_BASE_ID until MEDIA_SCHEDULE_BASE_ID,
+        )
         if (!isNotificationTypeEnabled(applicationContext, "local")) {
             result.success(null)
             return
@@ -3140,9 +3182,9 @@ class FlutterBoomNotificationPluginsPlugin :
             val intervalMillis =
                 if (intervalMinutes >= Long.MAX_VALUE / 60_000L) Long.MAX_VALUE
                 else intervalMinutes * 60_000L
-            val internalScheduleId = 9009 + index
+            val internalScheduleId = LOCAL_SCHEDULE_BASE_ID + index
             val intent = Intent(applicationContext, LocalNotificationReceiver::class.java).apply {
-                putExtra(EXTRA_ID, 9009)
+                putExtra(EXTRA_ID, LOCAL_SCHEDULE_BASE_ID)
                 putExtra(EXTRA_PAYLOAD, "local")
                 putExtra(EXTRA_CHANNEL_ID, "${channelName}_id")
                 putExtra(EXTRA_CHANNEL_NAME, channelName)
@@ -3166,7 +3208,68 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        configurePeriodicNotification(call, result, "media")
+        LocalNotificationScheduler.clearScheduleRange(
+            applicationContext,
+            MEDIA_SCHEDULE_BASE_ID until (MEDIA_SCHEDULE_BASE_ID + SCHEDULE_ID_RANGE_SIZE),
+        )
+        if (!isNotificationTypeEnabled(applicationContext, "media")) {
+            result.success(null)
+            return
+        }
+        val mediaArray = NotificationRemoteConfigManager.getMediaNotificationArray(applicationContext)
+        if (mediaArray == null || mediaArray.length() == 0) {
+            Log.d(TAG, "periodicallyShowMediaWithDuration skipped empty media_notification_arr")
+            result.success(null)
+            return
+        }
+        val reflectionConfig = parseMediaReflectionConfig(
+            call.argument<Map<String, Any?>>("reflectionConfig"),
+        )
+        if (reflectionConfig == null) {
+            result.error(
+                "invalid_media_reflection_config",
+                "MediaReflectionConfig is required for media notifications",
+                null,
+            )
+            return
+        }
+        migrateLegacyMediaNotificationTracking(applicationContext)
+        saveMediaReflectionConfig(applicationContext, reflectionConfig)
+        saveMediaNotificationConfig(
+            context = applicationContext,
+            baseId = MEDIA_UNIQUE_NOTIFICATION_ID,
+            channelId = DEFAULT_CHANNEL_ID,
+            channelName = DEFAULT_CHANNEL_NAME,
+            channelDescription = "media notifications desc",
+            priority = NotificationCompat.PRIORITY_HIGH,
+            importance = NotificationManager.IMPORTANCE_HIGH,
+            mediaBackgroundImage = call.argument("mediaBackgroundImageName"),
+            styleImage = null,
+            replaceExisting = true,
+            notificationList = emptyList(),
+        )
+        var registeredCount = 0
+        for (index in 0 until mediaArray.length()) {
+            val config = mediaArray.optJSONObject(index) ?: continue
+            val intervalMinutes = config.optLong("interval", 0L)
+            if (intervalMinutes <= 0L) continue
+            val intervalMillis =
+                if (intervalMinutes >= Long.MAX_VALUE / 60_000L) Long.MAX_VALUE
+                else intervalMinutes * 60_000L
+            val internalScheduleId = MEDIA_SCHEDULE_BASE_ID + index
+            val intent = Intent(applicationContext, LocalNotificationReceiver::class.java).apply {
+                putExtra(EXTRA_ID, MEDIA_UNIQUE_NOTIFICATION_ID)
+                putExtra(EXTRA_PAYLOAD, "media")
+                putExtra(EXTRA_REPEAT_INTERVAL, intervalMillis)
+                putExtra(EXTRA_CONFIG_DRIVEN_MEDIA, true)
+                putExtra("localScheduleId", internalScheduleId)
+            }
+            scheduleNextAlarm(applicationContext, intent)
+            registeredCount++
+        }
+        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        Log.d(TAG, "periodicallyShowMediaWithDuration registered=$registeredCount total=${mediaArray.length()}")
+        result.success(null)
     }
 
     private fun parseMediaReflectionConfig(config: Map<String, Any?>?): MediaReflectionConfig? {

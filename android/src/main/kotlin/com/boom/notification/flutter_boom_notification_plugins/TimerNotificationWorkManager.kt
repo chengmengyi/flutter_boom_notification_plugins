@@ -38,6 +38,10 @@ object TimerNotificationWorkManager {
         (1..3).forEach { workManager.cancelUniqueWork(workName(it)) }
     }
 
+    fun cancel(context: Context, scheduleId: Int) {
+        WorkManager.getInstance(context.applicationContext).cancelUniqueWork(workName(scheduleId))
+    }
+
     private fun enqueue(
         context: Context,
         config: LocalNotificationScheduler.TimerWorkConfig,

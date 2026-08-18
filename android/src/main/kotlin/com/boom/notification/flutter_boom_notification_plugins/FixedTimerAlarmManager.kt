@@ -78,6 +78,10 @@ object FixedTimerAlarmManager {
         }
     }
 
+    fun cancel(context: Context, scheduleId: Int, clear: Boolean = true) {
+        cancelSchedule(context.applicationContext, scheduleId, clear)
+    }
+
     private fun scheduleConfig(
         context: Context,
         config: LocalNotificationScheduler.TimerWorkConfig,

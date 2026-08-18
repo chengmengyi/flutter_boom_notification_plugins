@@ -325,13 +325,7 @@ abstract class FlutterBoomNotificationPluginsPlatform
 
   /// 按固定时间间隔循环展示媒体通知。
   Future<void> periodicallyShowMediaWithDuration({
-    required int id,
-    String? title,
-    String? body,
-    Duration repeatDurationInterval = const Duration(minutes: 30),
     String? mediaBackgroundImageName,
-    Map<String, Object?>? notificationDetails,
-    required List<Map<String, Object?>> notificationList,
     required Map<String, Object?> reflectionConfig,
   }) {
     throw UnimplementedError(

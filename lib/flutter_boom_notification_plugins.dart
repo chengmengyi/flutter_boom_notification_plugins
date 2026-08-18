@@ -11,9 +11,6 @@ export 'src/local_notification_models.dart';
 export 'src/notification_init_config.dart';
 
 class FlutterBoomNotificationPlugins {
-  static const Duration _defaultLocalNotificationInterval = Duration(
-    minutes: 30,
-  );
   static const Duration _defaultWorkManagerInterval = Duration(minutes: 60);
 
   static final FlutterBoomNotificationPlugins instance =
@@ -471,26 +468,12 @@ class FlutterBoomNotificationPlugins {
   /// - buildMethod: build
   /// - setMediaSessionMethod: setMediaSession
   Future<void> periodicallyShowMediaWithDuration({
-    required int id,
-    String? title,
-    String? body,
-    Duration repeatDurationInterval = _defaultLocalNotificationInterval,
     String? mediaBackgroundImageName,
-    AndroidNotificationDetails? notificationDetails,
-    required List<LocalNotificationContent> notificationList,
     required MediaReflectionConfig reflectionConfig,
   }) {
     return FlutterBoomNotificationPluginsPlatform.instance
         .periodicallyShowMediaWithDuration(
-          id: id,
-          title: title,
-          body: body,
-          repeatDurationInterval: repeatDurationInterval,
           mediaBackgroundImageName: mediaBackgroundImageName,
-          notificationDetails: notificationDetails?.toMap(),
-          notificationList: notificationList
-              .map((value) => value.toMap())
-              .toList(growable: false),
           reflectionConfig: reflectionConfig.toMap(),
         );
   }
