@@ -67,7 +67,7 @@ class NotificationInitConfig {
 
   Map<String, Object?> toMap() => <String, Object?>{
     'defaultConfig': defaultConfig,
-    'request': request?.toMap(),
+    'request': request.toMap(),
     'responseRule': responseRule.toMap(),
     'fieldMapping': fieldMapping,
   };
