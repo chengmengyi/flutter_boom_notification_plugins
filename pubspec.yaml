@@ -1,7 +1,7 @@
 name: flutter_boom_notification_plugins
 description: "boom notification"
 version: 0.0.1
-homepage:
+homepage: https://github.com/chengmengyi/flutter_boom_notification_plugins
 
 environment:
   sdk: ^3.9.2
