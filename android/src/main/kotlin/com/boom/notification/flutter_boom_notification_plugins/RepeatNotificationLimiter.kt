@@ -150,7 +150,11 @@ internal object RepeatNotificationLimiter {
                 .putInt(KEY_DAILY_SHOW_COUNT, newCount)
                 .commit()
             attemptInProgress = false
-            Log.d(TAG, "recorded payload=$payload time=$now count=$newCount date=$today")
+            Log.d(
+                TAG,
+                "notification sent type=${notificationType(payload)} payload=$payload " +
+                    "dailyCount=$newCount time=$now date=$today",
+            )
         }
     }
 
@@ -170,6 +174,18 @@ internal object RepeatNotificationLimiter {
     private fun safeMinutesToMillis(minutes: Long): Long =
         if (minutes >= Long.MAX_VALUE / MILLIS_PER_MINUTE) Long.MAX_VALUE
         else minutes.coerceAtLeast(0L) * MILLIS_PER_MINUTE
+
+    private fun notificationType(payload: String?): String =
+        when (payload?.trim()) {
+            "fcm" -> "fcm"
+            "local" -> "local"
+            "media" -> "media"
+            else -> if (BroadcastNotificationLimiter.isBroadcastPayload(payload)) {
+                "broadcast"
+            } else {
+                payload?.trim().orEmpty().ifBlank { "unknown" }
+            }
+        }
 
     private fun currentDate(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())

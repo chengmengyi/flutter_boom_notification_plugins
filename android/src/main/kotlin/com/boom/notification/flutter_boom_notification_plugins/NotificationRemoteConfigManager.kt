@@ -116,7 +116,7 @@ internal class NotificationRemoteConfigManager(
                     try {
                         val remoteConfig = requestAndParse(config)
                         preferences.edit().putString(KEY_CACHED_CONFIG, remoteConfig.toString()).apply()
-                        debugLog("Remote config saved to local cache\n$remoteConfig")
+                        debugLog("Remote config saved to local cache\n${remoteConfig.toString(2)}")
                         remoteConfig
                     } catch (error: Exception) {
                         logRemoteFailure(error)
@@ -149,7 +149,9 @@ internal class NotificationRemoteConfigManager(
                     try {
                         requestAndParse(config).also { remoteConfig ->
                             preferences.edit().putString(KEY_CACHED_CONFIG, remoteConfig.toString()).apply()
-                            debugLog("Refreshed remote config saved to local cache\n$remoteConfig")
+                            debugLog(
+                                "Refreshed remote config saved to local cache\n${remoteConfig.toString(2)}",
+                            )
                         }
                     } catch (error: Exception) {
                         logRemoteFailure(error)

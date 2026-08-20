@@ -121,7 +121,14 @@ object FixedTimerAlarmManager {
 
     private fun setAlarm(context: Context, scheduleId: Int, triggerAt: Long) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val pendingIntent = createPendingIntent(context, scheduleId, PendingIntent.FLAG_UPDATE_CURRENT)
+        val pendingIntent = createPendingIntent(
+            context,
+            scheduleId,
+            PendingIntent.FLAG_UPDATE_CURRENT,
+        ) ?: run {
+            Log.d(TAG, "setAlarm skipped because PendingIntent creation failed scheduleId=$scheduleId")
+            return
+        }
         manager.cancel(pendingIntent)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
@@ -144,7 +151,7 @@ object FixedTimerAlarmManager {
         }
     }
 
-    private fun createPendingIntent(context: Context, scheduleId: Int, flag: Int): PendingIntent =
+    private fun createPendingIntent(context: Context, scheduleId: Int, flag: Int): PendingIntent? =
         PendingIntent.getBroadcast(
             context,
             scheduleId,
