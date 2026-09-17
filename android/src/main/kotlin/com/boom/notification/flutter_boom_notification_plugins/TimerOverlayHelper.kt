@@ -23,8 +23,6 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_LAYOUT_2 = "timer_overlay_layout_2"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST_2 = "timer_overlay_content_list_2"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST_3 = "timer_overlay_content_list_3"
-    private const val KEY_TIMER_OVERLAY_INTERVAL_MILLIS = "timer_overlay_interval_millis"
-    private const val KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE = "timer_overlay_interval_from_update"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_PAGE = "timer_overlay_last_pdf_page"
     private const val KEY_TIMER_OVERLAY_CONTINUE_READING_STR =
@@ -34,11 +32,8 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT =
         "timer_overlay_last_pdf_button_text"
     private const val KEY_TIMER_OVERLAY_CLICK_EVENT = "timer_overlay_click_event"
-    private const val KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT = "timer_overlay_one_day_max_count"
     private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE = "timer_overlay_display_count_date"
     private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT = "timer_overlay_display_count"
-    private const val KEY_TIMER_OVERLAY_CD_TIME_MINUTES = "timer_overlay_cd_time_minutes"
-    private const val KEY_TIMER_OVERLAY_LAST_DISPLAY_AT = "timer_overlay_last_display_at"
     private const val KEY_TIMER_OVERLAY_REFLECTION_SECRET = "timer_overlay_reflection_secret"
     private const val KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS =
         "timer_overlay_reflection_settings_class"
@@ -67,8 +62,6 @@ object TimerOverlayHelper {
     private const val TIMER_OVERLAY_ACTION =
         "com.boom.notification.flutter_boom_notification_plugins.TIMER_OVERLAY"
     private const val TIMER_OVERLAY_REQUEST_CODE = 12006
-    private const val DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS = 20L * 60L * 1000L
-    private const val DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES = 1
     private const val MINUTE_MILLIS = 60L * 1000L
     private const val SCANNER_VISIBILITY_SETTLE_DELAY_MILLIS = 1000L
     private const val PART_SEPARATOR = "\u0001"
@@ -105,6 +98,18 @@ object TimerOverlayHelper {
         }
     }
 
+    data class NotificationTriggerResult(
+        val overlayTriggered: Boolean,
+        val notificationReplaced: Boolean,
+    ) {
+        companion object {
+            val NOT_TRIGGERED = NotificationTriggerResult(
+                overlayTriggered = false,
+                notificationReplaced = false,
+            )
+        }
+    }
+
     fun saveConfig(
         context: Context,
         layoutName: String,
@@ -112,7 +117,6 @@ object TimerOverlayHelper {
         layoutName2: String?,
         contentList2: List<Map<String, Any?>>,
         contentList3: List<Map<String, Any?>>,
-        requestedIntervalMillis: Long?,
         continueReadingStr: String?,
         lastPdfSubtitleTemplate: String?,
         lastPdfButtonText: String?,
@@ -144,10 +148,6 @@ object TimerOverlayHelper {
             .putString(
                 KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT,
                 lastPdfButtonText?.trim().orEmpty(),
-            )
-            .putLong(
-                KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
-                resolveSaveConfigIntervalMillis(context, requestedIntervalMillis),
             )
             .putString(KEY_TIMER_OVERLAY_REFLECTION_SECRET, reflectionConfig.secret)
             .putString(KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS, reflectionConfig.settingsClass)
@@ -198,39 +198,8 @@ object TimerOverlayHelper {
             editor.remove(KEY_TIMER_OVERLAY_CONTENT_LIST_3)
         }
         editor.apply()
-        scheduleNext(context)
+        syncStandaloneSchedule(context)
         Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size} layoutName2=$layoutName2 count2=${rows2.size} count3=${rows3.size}")
-    }
-
-    fun updateConfig(
-        context: Context,
-        requestedIntervalMillis: Long?,
-        oneDayMaxCount: Int?,
-        cdTime: Int?,
-    ) {
-        val editor =
-            prefs(context)
-                .edit()
-                .putLong(
-                    KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
-                    resolveIntervalMillis(context, requestedIntervalMillis),
-                )
-                .putBoolean(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE, true)
-        if (oneDayMaxCount == null) {
-            editor.remove(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT)
-        } else {
-            editor.putInt(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT, oneDayMaxCount.coerceAtLeast(0))
-        }
-        editor.putInt(
-            KEY_TIMER_OVERLAY_CD_TIME_MINUTES,
-            (cdTime ?: DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES).coerceAtLeast(0),
-        )
-        editor.apply()
-        scheduleNext(context)
-        Log.d(
-            TAG,
-            "updateConfig intervalMillis=${readIntervalMillis(context)} oneDayMaxCount=$oneDayMaxCount cdTime=${readCdTimeMinutes(context)}",
-        )
     }
 
     fun saveLastPdfInfo(
@@ -363,37 +332,74 @@ object TimerOverlayHelper {
     }
 
     fun handleAlarm(context: Context) {
-        FlutterBoomNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
-            context = context,
-            reason = "before_timer_overlay_alarm",
-            recordDisplayedBeforePermission = true,
-        )
+        val floatingConfig = NotificationRemoteConfigManager.getFloatingWindowConfig(context)
+        if (floatingConfig?.optBoolean("standalone_enabled", false) != true) {
+            cancelStandaloneSchedule(context)
+            Log.d(TAG, "handleAlarm skipped, standalone disabled")
+            return
+        }
         val config = readConfig(context)
         if (config == null) {
-            cancel(context)
+            cancelStandaloneSchedule(context)
             return
         }
         scheduleNext(context)
-        tryShowOverlay(context, config, "alarm")
+        tryShowOverlay(context, config, "standalone_alarm", standalone = true)
     }
 
-    fun tryShowForMediaTrigger(
+    /** Tries the floating window after notification rate limits have admitted this send attempt. */
+    fun tryHandleNotificationTrigger(
         context: Context,
-        reason: String,
-    ) {
+        payload: String?,
+    ): NotificationTriggerResult {
+        val floatingConfig = NotificationRemoteConfigManager.getFloatingWindowConfig(context)
+            ?: return NotificationTriggerResult.NOT_TRIGGERED
+        // Permission is intentionally checked first. A missing permission must never block the notification.
+        if (!canDrawOverlaysByReflection(context)) {
+            Log.d(TAG, "notification trigger skipped, overlay permission missing payload=$payload")
+            return NotificationTriggerResult.NOT_TRIGGERED
+        }
         val config = readConfig(context)
         if (config == null) {
-            Log.d(TAG, "tryShowForMediaTrigger skipped, no config reason=$reason")
-            return
+            Log.d(TAG, "notification trigger skipped, no overlay content config payload=$payload")
+            return NotificationTriggerResult.NOT_TRIGGERED
         }
-        tryShowOverlay(context, config, "media_trigger:$reason")
+        val onlyFloating = floatingConfig.optBoolean("only_send_floating_window", false)
+        val sourceEnabled = when {
+            payload == "local" -> floatingConfig.optBoolean("trigger_with_scheduled", false)
+            BroadcastNotificationLimiter.isBroadcastPayload(payload) ->
+                floatingConfig.optBoolean("trigger_with_broadcast", false)
+            else -> true
+        }
+        if (!sourceEnabled) {
+            Log.d(TAG, "notification trigger skipped by source switch payload=$payload")
+            return NotificationTriggerResult.NOT_TRIGGERED
+        }
+        val overlayTriggered = tryShowOverlay(
+            context = context,
+            config = config,
+            source = "notification:${payload ?: "unknown"}",
+            standalone = false,
+            allowScannerVisibilitySettlement = false,
+            permissionAlreadyChecked = true,
+        )
+        Log.d(
+            TAG,
+            "notification trigger payload=$payload onlyFloating=$onlyFloating triggered=$overlayTriggered",
+        )
+        return NotificationTriggerResult(
+            overlayTriggered = overlayTriggered,
+            notificationReplaced = onlyFloating && overlayTriggered,
+        )
     }
 
     private fun tryShowOverlay(
         context: Context,
         config: TimerOverlayConfig,
         source: String,
+        standalone: Boolean,
         allowScannerVisibilitySettlement: Boolean = true,
+        permissionAlreadyChecked: Boolean = false,
     ): Boolean {
         if (FlutterBoomNotificationPluginsPlugin.isDocumentScannerVisible(context)) {
             Log.d(TAG, "tryShowOverlay skipped, document scanner visible source=$source")
@@ -412,7 +418,9 @@ object TimerOverlayHelper {
                         context = appContext,
                         config = currentConfig,
                         source = "$source:scanner_settled",
+                        standalone = standalone,
                         allowScannerVisibilitySettlement = false,
+                        permissionAlreadyChecked = permissionAlreadyChecked,
                     )
                 },
                 SCANNER_VISIBILITY_SETTLE_DELAY_MILLIS,
@@ -423,20 +431,15 @@ object TimerOverlayHelper {
             Log.d(TAG, "tryShowOverlay skipped, app foreground source=$source")
             return false
         }
-        if (!canDisplayToday(context)) {
-            Log.d(TAG, "tryShowOverlay skipped, one day max count reached source=$source")
+        if (standalone && !canDisplayStandaloneToday(context)) {
+            Log.d(TAG, "tryShowOverlay skipped, standalone daily limit reached source=$source")
             return false
         }
-        if (!canDisplayByCooldown(context)) {
-            Log.d(TAG, "tryShowOverlay skipped, cooldown source=$source")
-            return false
-        }
-        if (!canDrawOverlaysByReflection(context)) {
+        if (!permissionAlreadyChecked && !canDrawOverlaysByReflection(context)) {
             Log.d(TAG, "tryShowOverlay skipped, overlay permission missing source=$source")
             return false
         }
-        increaseTodayDisplayCount(context)
-        saveLastDisplayAt(context)
+        if (standalone) increaseTodayDisplayCount(context)
         TimerOverlayService.show(
             context = context,
             layoutName = config.layoutName,
@@ -456,12 +459,20 @@ object TimerOverlayHelper {
     }
 
     fun scheduleNext(context: Context) {
-        if (readConfig(context) == null) {
+        val floatingConfig = NotificationRemoteConfigManager.getFloatingWindowConfig(context)
+        val intervalMinutes = floatingConfig?.optLong("standalone_interval_minutes", 0L)
+            ?.coerceAtLeast(0L) ?: 0L
+        if (
+            floatingConfig?.optBoolean("standalone_enabled", false) != true ||
+            intervalMinutes <= 0L ||
+            readConfig(context) == null
+        ) {
+            cancelStandaloneSchedule(context)
             return
         }
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val pendingIntent = createPendingIntent(context)
-        val intervalMillis = readIntervalMillis(context)
+        val intervalMillis = safeMinutesToMillis(intervalMinutes)
         val triggerAt = System.currentTimeMillis() + intervalMillis
         alarmManager.cancel(pendingIntent)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -484,12 +495,33 @@ object TimerOverlayHelper {
     }
 
     fun resume(context: Context) {
-        if (readConfig(context) == null) {
-            Log.d(TAG, "resume skipped, no config")
+        syncStandaloneSchedule(context)
+        Log.d(TAG, "resume")
+    }
+
+    fun onFloatingWindowConfigChanged(context: Context) {
+        val floatingConfig = NotificationRemoteConfigManager.getFloatingWindowConfig(context)
+        if (floatingConfig == null) {
+            cancelStandaloneSchedule(context)
+            TimerOverlayService.close(context)
+            Log.d(TAG, "floating window disabled, config missing or empty")
             return
         }
-        scheduleNext(context)
-        Log.d(TAG, "resume")
+        syncStandaloneSchedule(context)
+    }
+
+    private fun syncStandaloneSchedule(context: Context) {
+        val floatingConfig = NotificationRemoteConfigManager.getFloatingWindowConfig(context)
+        if (floatingConfig?.optBoolean("standalone_enabled", false) == true) {
+            scheduleNext(context)
+        } else {
+            cancelStandaloneSchedule(context)
+        }
+    }
+
+    private fun cancelStandaloneSchedule(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        alarmManager?.cancel(createPendingIntent(context))
     }
 
     fun cancel(context: Context) {
@@ -500,19 +532,14 @@ object TimerOverlayHelper {
             .remove(KEY_TIMER_OVERLAY_LAYOUT_2)
             .remove(KEY_TIMER_OVERLAY_CONTENT_LIST_2)
             .remove(KEY_TIMER_OVERLAY_CONTENT_LIST_3)
-            .remove(KEY_TIMER_OVERLAY_INTERVAL_MILLIS)
-            .remove(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_TITLE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_PAGE)
             .remove(KEY_TIMER_OVERLAY_CONTINUE_READING_STR)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT)
             .remove(KEY_TIMER_OVERLAY_CLICK_EVENT)
-            .remove(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT)
             .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE)
             .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT)
-            .remove(KEY_TIMER_OVERLAY_CD_TIME_MINUTES)
-            .remove(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT)
             .remove(KEY_TIMER_OVERLAY_REFLECTION_SECRET)
             .remove(KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS)
             .remove(KEY_TIMER_OVERLAY_REFLECTION_CAN_DRAW_OVERLAYS_METHOD)
@@ -813,62 +840,16 @@ object TimerOverlayHelper {
             .apply()
     }
 
-    private fun resolveIntervalMillis(
-        context: Context,
-        requestedIntervalMillis: Long?,
-    ): Long {
-        return requestedIntervalMillis
-            ?.takeIf { it > 0L }
-            ?: DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
-    }
+    private fun safeMinutesToMillis(minutes: Long): Long =
+        if (minutes >= Long.MAX_VALUE / MINUTE_MILLIS) Long.MAX_VALUE
+        else minutes.coerceAtLeast(0L) * MINUTE_MILLIS
 
-    private fun resolveSaveConfigIntervalMillis(
-        context: Context,
-        requestedIntervalMillis: Long?,
-    ): Long {
-        return if (prefs(context).getBoolean(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE, false)) {
-            readIntervalMillis(context)
-        } else {
-            resolveIntervalMillis(context, requestedIntervalMillis)
-        }
-    }
-
-    private fun readIntervalMillis(context: Context): Long {
-        return prefs(context).getLong(
-            KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
-            DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS,
-        ).takeIf { it > 0L } ?: DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
-    }
-
-    private fun readCdTimeMinutes(context: Context): Int {
-        return prefs(context).getInt(
-            KEY_TIMER_OVERLAY_CD_TIME_MINUTES,
-            DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES,
-        ).coerceAtLeast(0)
-    }
-
-    private fun canDisplayByCooldown(context: Context): Boolean {
-        val lastDisplayAt = prefs(context).getLong(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT, 0L)
-        if (lastDisplayAt <= 0L) {
-            return true
-        }
-        val cooldownMillis = readCdTimeMinutes(context) * MINUTE_MILLIS
-        return System.currentTimeMillis() - lastDisplayAt >= cooldownMillis
-    }
-
-    private fun saveLastDisplayAt(context: Context) {
-        prefs(context)
-            .edit()
-            .putLong(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT, System.currentTimeMillis())
-            .apply()
-    }
-
-    private fun canDisplayToday(context: Context): Boolean {
-        val maxCount = prefs(context).getInt(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT, -1)
-        if (maxCount < 0) {
-            return true
-        }
-        return readTodayDisplayCount(context) < maxCount
+    private fun canDisplayStandaloneToday(context: Context): Boolean {
+        val limit = NotificationRemoteConfigManager.getFloatingWindowConfig(context)
+            ?.optInt("standalone_daily_limit", 0)
+            ?.coerceAtLeast(0)
+            ?: return false
+        return readTodayDisplayCount(context) < limit
     }
 
     private fun increaseTodayDisplayCount(context: Context) {

@@ -75,6 +75,12 @@ internal class NotificationRemoteConfigManager(
             .putBoolean(KEY_BROADCAST_ENABLED, config.optBoolean("broadcast_enabled", false))
             .putBoolean(KEY_MEDIA_ENABLED, config.optBoolean("media_enabled", false))
             .putBoolean(KEY_PERSISTENT_ENABLED, config.optBoolean("persistent_enabled", false))
+            .putString(
+                KEY_FLOATING_WINDOW_CONFIG_JSON,
+                config.optJSONObject("floating_window_config")
+                    ?.takeIf { it.length() > 0 }
+                    ?.toString(),
+            )
             .putString(KEY_BROADCAST_CONFIG_JSON, config.optJSONObject("broadcast_config")?.toString())
             .putString(
                 KEY_SCHEDULED_NOTIFICATION_ARRAY_JSON,
@@ -85,6 +91,7 @@ internal class NotificationRemoteConfigManager(
                 config.optJSONArray("media_notification_arr")?.toString(),
             )
             .commit()
+        TimerOverlayHelper.onFloatingWindowConfigChanged(appContext)
         RepeatNotificationLimiter.savePolicy(
             context = appContext,
             firstDelayMinutes = config.optLong("first_send_delay_minutes", 0L),
@@ -406,6 +413,13 @@ internal class NotificationRemoteConfigManager(
                 .getString(KEY_BROADCAST_CONFIG_JSON, null)
                 ?.let { runCatching { JSONObject(it) }.getOrNull() }
 
+        fun getFloatingWindowConfig(context: Context): JSONObject? =
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_FLOATING_WINDOW_CONFIG_JSON, null)
+                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+                ?.takeIf { it.length() > 0 }
+
         fun getScheduledNotificationArray(context: Context): JSONArray? =
             context.applicationContext
                 .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -427,6 +441,7 @@ internal class NotificationRemoteConfigManager(
         const val KEY_FCM_ENABLED = "fcm_enabled"
         const val KEY_SCHEDULED_ENABLED = "scheduled_enabled"
         const val KEY_BROADCAST_ENABLED = "broadcast_enabled"
+        const val KEY_FLOATING_WINDOW_CONFIG_JSON = "floating_window_config_json"
         const val KEY_MEDIA_ENABLED = "media_enabled"
         const val KEY_PERSISTENT_ENABLED = "persistent_enabled"
         const val KEY_BROADCAST_CONFIG_JSON = "broadcast_config_json"

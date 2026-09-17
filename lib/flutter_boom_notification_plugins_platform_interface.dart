@@ -138,20 +138,8 @@ abstract class FlutterBoomNotificationPluginsPlatform
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     required Map<String, Object?> reflectionConfig,
-    Duration timerInterval = const Duration(minutes: 20),
   }) {
     throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');
-  }
-
-  /// 更新定时悬浮窗信息。
-  Future<void> updateTimerOverlayInfo({
-    required Duration timerInterval,
-    int? oneDayMaxCount,
-    int? cdTime,
-  }) {
-    throw UnimplementedError(
-      'updateTimerOverlayInfo() has not been implemented.',
-    );
   }
 
   /// 更新是否在通知触发前显示媒体通知。

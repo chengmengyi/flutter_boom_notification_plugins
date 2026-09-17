@@ -212,7 +212,6 @@ class FlutterBoomNotificationPlugins {
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     required TimerOverlayReflectionConfig reflectionConfig,
-    Duration timerInterval = const Duration(minutes: 20),
   }) {
     return FlutterBoomNotificationPluginsPlatform.instance.setTimerOverlayInfo(
       layoutName: layoutName,
@@ -224,22 +223,7 @@ class FlutterBoomNotificationPlugins {
       lastPdfSubtitleTemplate: lastPdfSubtitleTemplate,
       lastPdfButtonText: lastPdfButtonText,
       reflectionConfig: reflectionConfig.toMap(),
-      timerInterval: timerInterval,
     );
-  }
-
-  /// 更新定时悬浮窗间隔和每天最大展示次数；oneDayMaxCount 为空时不限制。
-  Future<void> updateTimerOverlayInfo({
-    required Duration timerInterval,
-    int? oneDayMaxCount,
-    int? cdTime,
-  }) {
-    return FlutterBoomNotificationPluginsPlatform.instance
-        .updateTimerOverlayInfo(
-          timerInterval: timerInterval,
-          oneDayMaxCount: oneDayMaxCount,
-          cdTime: cdTime,
-        );
   }
 
   /// 更新是否在通知触发前显示媒体通知。

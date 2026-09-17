@@ -173,7 +173,6 @@ class MethodChannelFlutterBoomNotificationPlugins
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     required Map<String, Object?> reflectionConfig,
-    Duration timerInterval = const Duration(minutes: 20),
   }) {
     return methodChannel.invokeMethod<void>('setTimerOverlayInfo', {
       'layoutName': layoutName,
@@ -185,21 +184,6 @@ class MethodChannelFlutterBoomNotificationPlugins
       'lastPdfSubtitleTemplate': lastPdfSubtitleTemplate,
       'lastPdfButtonText': lastPdfButtonText,
       'reflectionConfig': reflectionConfig,
-      'timerIntervalMilliseconds': timerInterval.inMilliseconds,
-    });
-  }
-
-  /// 通过原生通道更新定时悬浮窗信息。
-  @override
-  Future<void> updateTimerOverlayInfo({
-    required Duration timerInterval,
-    int? oneDayMaxCount,
-    int? cdTime,
-  }) {
-    return methodChannel.invokeMethod<void>('updateTimerOverlayInfo', {
-      'timerIntervalMilliseconds': timerInterval.inMilliseconds,
-      'oneDayMaxCount': oneDayMaxCount,
-      'cdTime': cdTime,
     });
   }
 

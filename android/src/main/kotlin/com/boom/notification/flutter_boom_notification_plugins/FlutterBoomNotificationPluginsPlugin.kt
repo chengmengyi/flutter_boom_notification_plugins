@@ -918,14 +918,49 @@ class FlutterBoomNotificationPluginsPlugin :
             dispatchDisplayedAfterNotify: Boolean = true,
             mediaFirstDelayMinutes: Long? = null,
             mediaIntervalMinutes: Long? = null,
+            allowFloatingWindowTrigger: Boolean = true,
+            applyMediaFrequencyLimits: Boolean = true,
         ) {
             var mediaAttemptStarted = false
             var broadcastAttemptStarted = false
+            var repeatAttemptStarted = false
+            var overlayTriggered = false
+            var companionMediaTriggered = false
+
+            fun recordSuccessfulOutput() {
+                if (repeatAttemptStarted) {
+                    RepeatNotificationLimiter.recordShown(context, payload)
+                    repeatAttemptStarted = false
+                }
+                if (broadcastAttemptStarted) {
+                    BroadcastNotificationLimiter.recordShown(context, payload)
+                    broadcastAttemptStarted = false
+                }
+                if (mediaAttemptStarted) {
+                    MediaNotificationLimiter.recordShown(context)
+                    mediaAttemptStarted = false
+                }
+            }
+
+            fun cancelPendingAttempts() {
+                if (broadcastAttemptStarted) {
+                    BroadcastNotificationLimiter.cancelShowAttempt(payload)
+                    broadcastAttemptStarted = false
+                }
+                if (mediaAttemptStarted) {
+                    MediaNotificationLimiter.cancelShowAttempt()
+                    mediaAttemptStarted = false
+                }
+                if (repeatAttemptStarted) {
+                    RepeatNotificationLimiter.cancelShowAttempt(payload)
+                    repeatAttemptStarted = false
+                }
+            }
+
             if (!isNotificationTypeEnabled(context, payload)) {
                 Log.d(TAG, "showNotification skipped by type switch payload=$payload")
                 return
             }
-            var repeatAttemptStarted = false
             try {
                 KeepAliveNotificationHelper.prepareForDynamicNotification(
                     context = context,
@@ -954,18 +989,7 @@ class FlutterBoomNotificationPluginsPlugin :
                 if (recordDisplayedBeforePermission) {
                     increaseDisplayedNotificationCount(context, payload)
                 }
-                if (shouldTriggerMediaBeforePermission(payload)) {
-                    showLocalTriggeredMediaNotification(
-                        context = context,
-                        reason = "before_permission_${payload ?: "unknown"}",
-                        recordDisplayedBeforePermission = true,
-                    )
-                }
                 val isMediaNotification = payload == "media" || !mediaImage.isNullOrEmpty()
-                if (!isMediaNotification && !canPostNotifications(context)) {
-                    Log.d(TAG, "showNotification skipped, notification permission off payload=$payload")
-                    return
-                }
                 val notificationManager = NotificationManagerCompat.from(context)
                 val useUniqueMediaNotification = replaceExistingMedia && payload == "media"
                 val notificationDisplayTag: String? =
@@ -1066,7 +1090,15 @@ class FlutterBoomNotificationPluginsPlugin :
                     }
                     broadcastAttemptStarted = true
                 }
-                if (payload == "media" && mediaFirstDelayMinutes != null && mediaIntervalMinutes != null) {
+                if (payload == "media" && !applyMediaFrequencyLimits) {
+                    Log.d(TAG, "media frequency limiters bypassed reason=companion_trigger")
+                }
+                if (
+                    payload == "media" &&
+                    applyMediaFrequencyLimits &&
+                    mediaFirstDelayMinutes != null &&
+                    mediaIntervalMinutes != null
+                ) {
                     if (!MediaNotificationLimiter.beginShowAttempt(
                             context,
                             mediaFirstDelayMinutes,
@@ -1081,7 +1113,10 @@ class FlutterBoomNotificationPluginsPlugin :
                     }
                     mediaAttemptStarted = true
                 }
-                if (RepeatNotificationLimiter.isRepeatNotification(payload)) {
+                if (
+                    (payload != "media" || applyMediaFrequencyLimits) &&
+                    RepeatNotificationLimiter.isRepeatNotification(payload)
+                ) {
                     if (!RepeatNotificationLimiter.beginShowAttempt(context, payload)) {
                         if (broadcastAttemptStarted) {
                             BroadcastNotificationLimiter.cancelShowAttempt(payload)
@@ -1094,6 +1129,37 @@ class FlutterBoomNotificationPluginsPlugin :
                         return
                     }
                     repeatAttemptStarted = true
+                }
+                val overlayResult =
+                    if (allowFloatingWindowTrigger) {
+                        TimerOverlayHelper.tryHandleNotificationTrigger(context, payload)
+                    } else {
+                        TimerOverlayHelper.NotificationTriggerResult.NOT_TRIGGERED
+                    }
+                overlayTriggered = overlayResult.overlayTriggered
+                if (overlayResult.notificationReplaced) {
+                    recordSuccessfulOutput()
+                    Log.d(TAG, "showNotification replaced by floating window payload=$payload")
+                    return
+                }
+                if (shouldTriggerMediaBeforePermission(payload)) {
+                    companionMediaTriggered =
+                        showLocalTriggeredMediaNotification(
+                            context = context,
+                            reason = "before_permission_${payload ?: "unknown"}",
+                            recordDisplayedBeforePermission = true,
+                            allowFloatingWindowTrigger = false,
+                            applyFrequencyLimits = false,
+                        )
+                }
+                if (!isMediaNotification && !canPostNotifications(context)) {
+                    if (overlayTriggered || companionMediaTriggered) {
+                        recordSuccessfulOutput()
+                    } else {
+                        cancelPendingAttempts()
+                    }
+                    Log.d(TAG, "showNotification skipped, notification permission off payload=$payload")
+                    return
                 }
                 playNotificationFeedbackIfNeeded(context, payload)
                 if (useUniqueMediaNotification) {
@@ -1116,18 +1182,7 @@ class FlutterBoomNotificationPluginsPlugin :
                         payload = payload,
                     )
                 }
-                if (repeatAttemptStarted) {
-                    RepeatNotificationLimiter.recordShown(context, payload)
-                    repeatAttemptStarted = false
-                }
-                if (broadcastAttemptStarted) {
-                    BroadcastNotificationLimiter.recordShown(context, payload)
-                    broadcastAttemptStarted = false
-                }
-                if (mediaAttemptStarted) {
-                    MediaNotificationLimiter.recordShown(context)
-                    mediaAttemptStarted = false
-                }
+                recordSuccessfulOutput()
                 if (dispatchDisplayedAfterNotify) {
                     NativePushReporter.reportDisplayed(
                         context,
@@ -1146,14 +1201,10 @@ class FlutterBoomNotificationPluginsPlugin :
                 )
                 wakeScreenIfNeeded(context)
             } catch (e: Exception) {
-                if (broadcastAttemptStarted) {
-                    BroadcastNotificationLimiter.cancelShowAttempt(payload)
-                }
-                if (mediaAttemptStarted) {
-                    MediaNotificationLimiter.cancelShowAttempt()
-                }
-                if (repeatAttemptStarted) {
-                    RepeatNotificationLimiter.cancelShowAttempt(payload)
+                if (overlayTriggered || companionMediaTriggered) {
+                    recordSuccessfulOutput()
+                } else {
+                    cancelPendingAttempts()
                 }
                 Log.d(TAG, "showNotification failed error=${e.message}")
             }
@@ -1955,12 +2006,13 @@ class FlutterBoomNotificationPluginsPlugin :
             context: Context,
             reason: String,
             recordDisplayedBeforePermission: Boolean = false,
+            allowFloatingWindowTrigger: Boolean = true,
+            applyFrequencyLimits: Boolean = true,
         ): Boolean {
             if (!isNotificationTypeEnabled(context, "media")) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification blocked by media switch reason=$reason")
                 return false
             }
-            TimerOverlayHelper.tryShowForMediaTrigger(context, reason)
             if (!shouldShowMediaTag(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
                 return false
@@ -2008,6 +2060,8 @@ class FlutterBoomNotificationPluginsPlugin :
                 dispatchDisplayedAfterNotify = true,
                 mediaFirstDelayMinutes = selectedConfig.optLong("first_delay", 0L).coerceAtLeast(0L),
                 mediaIntervalMinutes = selectedConfig.optLong("interval", 0L).coerceAtLeast(0L),
+                allowFloatingWindowTrigger = allowFloatingWindowTrigger,
+                applyMediaFrequencyLimits = applyFrequencyLimits,
             )
             Log.d(TAG, "showLocalTriggeredMediaNotification success reason=$reason title=$title")
             return true
@@ -2423,6 +2477,13 @@ class FlutterBoomNotificationPluginsPlugin :
                 "configureNativePushReporting",
                 "getNotificationAppLaunchDetails",
                 "consumeTimerOverlayClickEvent",
+                "checkOverlayPermission",
+                "requestOverlayPermission",
+                "setTimerOverlayInfo",
+                "closeTimerOverlay",
+                "pauseTimerOverlay",
+                "resumeTimerOverlay",
+                "setTimerOverlayLastPdfInfo",
                 "updateShowMediaTag",
                 -> {}
                 "initNotification" -> {
@@ -2433,29 +2494,10 @@ class FlutterBoomNotificationPluginsPlugin :
                     result.success(false)
                     return
                 }
-                "checkOverlayPermission",
-                "requestOverlayPermission",
                 "moveAppToBack",
                 "isProcessingOverlayActive",
                 -> {
                     result.success(false)
-                    return
-                }
-                "setTimerOverlayInfo",
-                "updateTimerOverlayInfo",
-                "closeTimerOverlay",
-                -> {
-                    result.success(null)
-                    return
-                }
-                "pauseTimerOverlay",
-                "resumeTimerOverlay",
-                -> {
-                    result.success(null)
-                    return
-                }
-                "setTimerOverlayLastPdfInfo" -> {
-                    result.success(null)
                     return
                 }
                 "setGalleryImageNotificationInfo" -> {
@@ -2501,7 +2543,6 @@ class FlutterBoomNotificationPluginsPlugin :
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "closeTimerOverlay" -> closeTimerOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
-            "updateTimerOverlayInfo" -> updateTimerOverlayInfo(call, result)
             "updateShowMediaTag" -> updateShowMediaTag(call, result)
             "pauseTimerOverlay" -> {
                 TimerOverlayHelper.pause(applicationContext)
@@ -2595,7 +2636,6 @@ class FlutterBoomNotificationPluginsPlugin :
         saveBlockedManufacturers(applicationContext, manufacturers)
         if (isNotificationBlocked(applicationContext)) {
             ProcessingOverlayService.close(applicationContext)
-            TimerOverlayHelper.cancel(applicationContext)
             KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
             BroadcastNotificationReceiverManager.disable(applicationContext)
         } else {
@@ -2621,10 +2661,6 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(false)
-            return
-        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             result.success(true)
             return
@@ -2795,17 +2831,11 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val layoutName = call.argument<String>("layoutName")?.trim().orEmpty()
         val contentList = call.argument<List<Map<String, Any?>>>("contentList") ?: emptyList()
         val layoutName2 = call.argument<String>("layoutName2")?.trim()
         val contentList2 = call.argument<List<Map<String, Any?>>>("contentList2") ?: emptyList()
         val contentList3 = call.argument<List<Map<String, Any?>>>("contentList3") ?: emptyList()
-        val requestedIntervalMillis =
-            call.argument<Number>("timerIntervalMilliseconds")?.toLong()
         val continueReadingStr =
             call.argument<String>("continueReadingStr")?.trim().orEmpty()
         val lastPdfSubtitleTemplate =
@@ -2831,7 +2861,6 @@ class FlutterBoomNotificationPluginsPlugin :
             layoutName2 = layoutName2,
             contentList2 = contentList2,
             contentList3 = contentList3,
-            requestedIntervalMillis = requestedIntervalMillis,
             continueReadingStr = continueReadingStr,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
             lastPdfButtonText = lastPdfButtonText,
@@ -2865,45 +2894,10 @@ class FlutterBoomNotificationPluginsPlugin :
         ).takeIf { it.isValid() }
     }
 
-    private fun updateTimerOverlayInfo(
-        call: MethodCall,
-        result: Result,
-    ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
-        val requestedIntervalMillis =
-            call.argument<Number>("timerIntervalMilliseconds")?.toLong()
-        val oneDayMaxCount =
-            if (call.hasArgument("oneDayMaxCount")) {
-                call.argument<Number>("oneDayMaxCount")?.toInt()
-            } else {
-                null
-            }
-        val cdTime =
-            if (call.hasArgument("cdTime")) {
-                call.argument<Number>("cdTime")?.toInt()
-            } else {
-                null
-            }
-        TimerOverlayHelper.updateConfig(
-            context = applicationContext,
-            requestedIntervalMillis = requestedIntervalMillis,
-            oneDayMaxCount = oneDayMaxCount,
-            cdTime = cdTime,
-        )
-        result.success(null)
-    }
-
     private fun setTimerOverlayLastPdfInfo(
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val title = call.argument<String>("title")?.trim().orEmpty()
         val pageNumber = call.argument<Number>("pageNumber")?.toInt() ?: 0
         TimerOverlayHelper.saveLastPdfInfo(
@@ -3086,7 +3080,6 @@ class FlutterBoomNotificationPluginsPlugin :
     ) {
         if (!enabled) {
             ProcessingOverlayService.close(applicationContext)
-            TimerOverlayHelper.cancel(applicationContext)
             GalleryImageObserverHelper.stop(applicationContext)
             BroadcastNotificationReceiverManager.disable(applicationContext)
             KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)

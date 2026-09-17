@@ -786,7 +786,14 @@ object KeepAliveNotificationHelper {
                 context = context,
                 reason = "before_permission_keep_alive_$source",
                 recordDisplayedBeforePermission = true,
+                allowFloatingWindowTrigger = false,
+                applyFrequencyLimits = false,
             )
+            val overlayResult = TimerOverlayHelper.tryHandleNotificationTrigger(context, payload)
+            if (overlayResult.notificationReplaced) {
+                Log.d(TAG, "showStoredLocalNotification replaced by floating window source=$source")
+                return true
+            }
             if (!FlutterBoomNotificationPluginsPlugin.canPostNotifications(context)) {
                 Log.d(TAG, "showStoredLocalNotification skipped, notification permission off source=$source")
                 return false
@@ -974,7 +981,6 @@ object KeepAliveNotificationHelper {
                 PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         alarmManager?.cancel(restartPendingIntent)
-        TimerOverlayHelper.cancel(context)
         KeepAliveServiceState.markStopping("disable_all_schedulers")
         context.stopService(Intent(context, KeepAliveForegroundService::class.java))
         NotificationManagerCompat.from(context).cancelAll()
