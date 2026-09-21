@@ -1481,22 +1481,6 @@ class FlutterBoomNotificationPluginsPlugin :
                 R.id.fln_beauty_notify_app_icon,
                 appIconResId ?: fallbackIconResId,
             )
-            val imageValue = template.beautyImage
-            if (imageValue.isNotEmpty()) {
-                if (imageValue.startsWith("http")) {
-                    val bitmap = loadNotificationBitmap(context, imageValue)
-                    if (bitmap != null) {
-                        small.setImageViewBitmap(R.id.fln_beauty_notify_image, bitmap)
-                        big.setImageViewBitmap(R.id.fln_beauty_notify_image, bitmap)
-                    }
-                } else {
-                    val imageResId = resolveNamedResourceId(context, imageValue)
-                    if (imageResId != null) {
-                        small.setImageViewResource(R.id.fln_beauty_notify_image, imageResId)
-                        big.setImageViewResource(R.id.fln_beauty_notify_image, imageResId)
-                    }
-                }
-            }
             builder.setCustomHeadsUpContentView(small)
             builder.setCustomContentView(small)
             builder.setCustomBigContentView(big)
@@ -2155,15 +2139,14 @@ class FlutterBoomNotificationPluginsPlugin :
             title: String,
             body: String,
             messageId: Int,
-            image: String,
         ) {
             val template = extractFcmNotificationTemplate(context)
             val effectiveTitle = title
             val effectiveBody = body
-            val effectiveImage = if (image.isNotEmpty()) image else template.beautyImage
+            // FCM notifications keep the image declared by the layout and never download one.
             Log.d(
                 TAG,
-                "showFcmNotification messageId=$messageId title=$effectiveTitle body=$effectiveBody image=$effectiveImage",
+                "showFcmNotification messageId=$messageId title=$effectiveTitle body=$effectiveBody",
             )
             showNotification(
                 context = context,
@@ -2177,12 +2160,10 @@ class FlutterBoomNotificationPluginsPlugin :
                 channelDescription = template.channelDescription,
                 priority = resolvePriority(template.priority),
                 importance = resolveImportance(template.importance),
-                customLayoutImageValue = effectiveImage,
                 beautyTemplate = if (template.style == "beauty") {
                     template.copy(
                         beautyTitle = effectiveTitle,
                         beautyBody = effectiveBody,
-                        beautyImage = effectiveImage,
                     )
                 } else {
                     null
