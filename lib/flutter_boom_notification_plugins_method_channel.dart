@@ -177,6 +177,7 @@ class MethodChannelFlutterBoomNotificationPlugins
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
     List<Map<String, Object?>>? contentList3,
+    required int closeOverlayProbability,
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
@@ -188,10 +189,21 @@ class MethodChannelFlutterBoomNotificationPlugins
       'layoutName2': layoutName2,
       'contentList2': contentList2,
       'contentList3': contentList3,
+      'closeOverlayProbability': closeOverlayProbability,
       'continueReadingStr': continueReadingStr,
       'lastPdfSubtitleTemplate': lastPdfSubtitleTemplate,
       'lastPdfButtonText': lastPdfButtonText,
       'reflectionConfig': reflectionConfig,
+    });
+  }
+
+  /// 通过原生通道更新悬浮窗关闭操作真正关闭的概率。
+  @override
+  Future<void> updateCloseOverlayProbability({
+    required int closeOverlayProbability,
+  }) {
+    return methodChannel.invokeMethod<void>('updateCloseOverlayProbability', {
+      'closeOverlayProbability': closeOverlayProbability,
     });
   }
 

@@ -141,12 +141,22 @@ abstract class FlutterBoomNotificationPluginsPlatform
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
     List<Map<String, Object?>>? contentList3,
+    required int closeOverlayProbability,
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     required Map<String, Object?> reflectionConfig,
   }) {
     throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');
+  }
+
+  /// 更新悬浮窗关闭操作真正关闭的概率。
+  Future<void> updateCloseOverlayProbability({
+    required int closeOverlayProbability,
+  }) {
+    throw UnimplementedError(
+      'updateCloseOverlayProbability() has not been implemented.',
+    );
   }
 
   /// 更新是否在通知触发前显示媒体通知。

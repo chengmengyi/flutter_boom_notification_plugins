@@ -191,13 +191,16 @@ class FlutterBoomNotificationPlugins {
   /// Android 日志出现 `READY_TO_SEND_FCM` 后立即发送高优先级 DATA FCM；
   /// 服务确实由 FCM 提升为前台后会输出 `FCM_FOREGROUND_SERVICE_STARTED`。
   stopKeepAliveForegroundServiceForFcmTest() {
-    if(!kDebugMode){
-      return ;
+    if (!kDebugMode) {
+      return;
     }
-    FlutterBoomNotificationPluginsPlatform.instance.stopKeepAliveForegroundServiceForFcmTest();
+    FlutterBoomNotificationPluginsPlatform.instance
+        .stopKeepAliveForegroundServiceForFcmTest();
   }
 
   /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。
+  ///
+  /// [closeOverlayProbability] 表示每次展示时关闭操作真正关闭悬浮窗的概率，范围为 0 到 100。
   ///
   /// [reflectionConfig] 里的字符串建议都通过 [encryptReflectionString] 生成密文后传入，
   /// 并且 [TimerOverlayReflectionConfig.secret] 要和加密时使用的 secret 一致。
@@ -221,22 +224,47 @@ class FlutterBoomNotificationPlugins {
     String? layoutName2,
     List<TimerOverlayContent>? contentList2,
     List<TimerOverlayContent>? contentList3,
+    required int closeOverlayProbability,
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     required TimerOverlayReflectionConfig reflectionConfig,
   }) {
+    _validateCloseOverlayProbability(closeOverlayProbability);
     return FlutterBoomNotificationPluginsPlatform.instance.setTimerOverlayInfo(
       layoutName: layoutName,
       contentList: contentList.map((value) => value.toMap()).toList(),
       layoutName2: layoutName2,
       contentList2: contentList2?.map((value) => value.toMap()).toList(),
       contentList3: contentList3?.map((value) => value.toMap()).toList(),
+      closeOverlayProbability: closeOverlayProbability,
       continueReadingStr: continueReadingStr,
       lastPdfSubtitleTemplate: lastPdfSubtitleTemplate,
       lastPdfButtonText: lastPdfButtonText,
       reflectionConfig: reflectionConfig.toMap(),
     );
+  }
+
+  /// 更新悬浮窗关闭操作真正关闭的概率，取值范围为 0 到 100。
+  Future<void> updateCloseOverlayProbability({
+    required int closeOverlayProbability,
+  }) {
+    _validateCloseOverlayProbability(closeOverlayProbability);
+    return FlutterBoomNotificationPluginsPlatform.instance
+        .updateCloseOverlayProbability(
+          closeOverlayProbability: closeOverlayProbability,
+        );
+  }
+
+  void _validateCloseOverlayProbability(int closeOverlayProbability) {
+    if (closeOverlayProbability < 0 || closeOverlayProbability > 100) {
+      throw RangeError.range(
+        closeOverlayProbability,
+        0,
+        100,
+        'closeOverlayProbability',
+      );
+    }
   }
 
   /// 更新是否在通知触发前显示媒体通知。

@@ -47,6 +47,7 @@ class TimerOverlayService : Service() {
         private const val EXTRA_BUTTON_2 = "timer_overlay_button_2"
         private const val EXTRA_USE_LAST_PDF_INFO = "timer_overlay_use_last_pdf_info"
         private const val EXTRA_CONTINUE_READING_STR = "timer_overlay_continue_reading_str"
+        private const val EXTRA_CLOSE_OVERLAY_PROBABILITY = "timer_overlay_close_probability"
         private const val CHANNEL_ID = "timer_overlay_channel"
         private const val CHANNEL_NAME = "Timer Overlay"
         private const val NOTIFICATION_ID = 12007
@@ -75,6 +76,7 @@ class TimerOverlayService : Service() {
             button2: String?,
             useLastPdfInfo: Boolean,
             continueReadingStr: String?,
+            closeOverlayProbability: Int,
         ) {
             if (FlutterBoomNotificationPluginsPlugin.isDocumentScannerVisible(context)) {
                 Log.d(TAG, "show skipped, document scanner visible")
@@ -101,6 +103,7 @@ class TimerOverlayService : Service() {
                     putExtra(EXTRA_BUTTON_2, button2)
                     putExtra(EXTRA_USE_LAST_PDF_INFO, useLastPdfInfo)
                     putExtra(EXTRA_CONTINUE_READING_STR, continueReadingStr)
+                    putExtra(EXTRA_CLOSE_OVERLAY_PROBABILITY, closeOverlayProbability)
                 }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ContextCompat.startForegroundService(context, intent)
@@ -191,6 +194,8 @@ class TimerOverlayService : Service() {
                 button2 = intent?.getStringExtra(EXTRA_BUTTON_2),
                 useLastPdfInfo = intent?.getBooleanExtra(EXTRA_USE_LAST_PDF_INFO, true) != false,
                 continueReadingStr = intent?.getStringExtra(EXTRA_CONTINUE_READING_STR),
+                closeOverlayProbability =
+                    intent?.getIntExtra(EXTRA_CLOSE_OVERLAY_PROBABILITY, 100) ?: 100,
             )
             ensureForegroundNotification()
         } catch (e: Exception) {
@@ -228,6 +233,7 @@ class TimerOverlayService : Service() {
         button2: String?,
         useLastPdfInfo: Boolean,
         continueReadingStr: String?,
+        closeOverlayProbability: Int,
     ) {
         if (FlutterBoomNotificationPluginsPlugin.isDocumentScannerVisible(applicationContext)) {
             Log.d(TAG, "showOverlay skipped, document scanner visible")
@@ -245,33 +251,18 @@ class TimerOverlayService : Service() {
             stopSelf()
             return
         }
+        val closeDecision =
+            CloseOverlayProbabilityDecider.roll(closeOverlayProbability)
+        Log.d(
+            TAG,
+            "showOverlay closeOverlayProbability=${closeDecision.closeOverlayProbability} " +
+                "randomPercent=${closeDecision.randomPercent} " +
+                "shouldReallyClose=${closeDecision.shouldReallyClose}",
+        )
         val view =
             LayoutInflater.from(this).inflate(layoutResId, null, false).apply {
                 isClickable = true
-                setOnClickListener {
-                    try {
-                        FlutterBoomNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
-                        val clickEvent = TimerOverlayHelper.cacheClickEvent(
-                            context = applicationContext,
-                            layoutName = layoutName,
-                            clickType = clickType,
-                            content = pendingDisplayContent,
-                        )
-                        val started = FlutterBoomNotificationPluginsPlugin.startTimerOverlayClickIntent(
-                            context = applicationContext,
-                            event = clickEvent,
-                        )
-                        stopSelf()
-                        if (!started) {
-                            TimerOverlayHelper.dispatchClickEvent(
-                                context = applicationContext,
-                                event = clickEvent,
-                            )
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "overlay click failed", e)
-                    }
-                }
+                setOnClickListener { handleOpenClick(layoutName, clickType) }
             }
         pendingDisplayContent = if (isBanner) {
             bindBannerContents(view, bannerContents).also {
@@ -281,9 +272,15 @@ class TimerOverlayService : Service() {
             bindContent(view, title, desc, button, button2, useLastPdfInfo, continueReadingStr)
         }
         if (isBanner) {
-            bindBannerGestures(view)
+            bindBannerGestures(view, closeDecision)
         } else {
-            bindCloseAction(view, useSecondLayout)
+            bindCloseAction(
+                view = view,
+                useSecondLayout = useSecondLayout,
+                closeDecision = closeDecision,
+                layoutName = layoutName,
+                clickType = clickType,
+            )
         }
         try {
             val added =
@@ -432,7 +429,10 @@ class TimerOverlayService : Service() {
         }
     }
 
-    private fun bindBannerGestures(view: View) {
+    private fun bindBannerGestures(
+        view: View,
+        closeDecision: CloseOverlayProbabilityDecider.Decision,
+    ) {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         var downX = 0f
         var downY = 0f
@@ -471,30 +471,41 @@ class TimerOverlayService : Service() {
                         val dismissRight = target.translationX >= target.width * 0.3f
                         val dismissUp = -target.translationY >= target.height * 0.3f
                         if (dismissRight || dismissUp) {
-                            dismissBanner(target, dismissRight)
+                            val action =
+                                if (closeDecision.shouldReallyClose) "close" else "rebound"
+                            Log.d(
+                                TAG,
+                                "banner close interaction probability=${closeDecision.closeOverlayProbability} " +
+                                    "randomPercent=${closeDecision.randomPercent} " +
+                                    "shouldReallyClose=${closeDecision.shouldReallyClose} action=$action",
+                            )
+                            if (closeDecision.shouldReallyClose) {
+                                dismissBanner(target, dismissRight)
+                            } else {
+                                resetBannerPosition(target)
+                            }
                         } else {
-                            target.animate()
-                                .translationX(0f)
-                                .translationY(0f)
-                                .alpha(1f)
-                                .setDuration(180L)
-                                .start()
+                            resetBannerPosition(target)
                         }
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    target.animate()
-                        .translationX(0f)
-                        .translationY(0f)
-                        .alpha(1f)
-                        .setDuration(180L)
-                        .start()
+                    resetBannerPosition(target)
                     true
                 }
                 else -> false
             }
         }
+    }
+
+    private fun resetBannerPosition(view: View) {
+        view.animate()
+            .translationX(0f)
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(180L)
+            .start()
     }
 
     private fun selectBannerContentAt(view: View, rawX: Int, rawY: Int) {
@@ -552,6 +563,9 @@ class TimerOverlayService : Service() {
     private fun bindCloseAction(
         view: View,
         useSecondLayout: Boolean,
+        closeDecision: CloseOverlayProbabilityDecider.Decision,
+        layoutName: String,
+        clickType: String,
     ) {
         val closeViewName = if (useSecondLayout) "later_btn_text" else "close_img"
         val closeViewId = resources.getIdentifier(closeViewName, "id", packageName)
@@ -566,11 +580,53 @@ class TimerOverlayService : Service() {
         }
         closeView.setOnClickListener {
             try {
-                removeOverlay()
-                stopSelf()
+                val action = if (closeDecision.shouldReallyClose) "close" else "open"
+                Log.d(
+                    TAG,
+                    "close interaction name=$closeViewName " +
+                        "probability=${closeDecision.closeOverlayProbability} " +
+                        "randomPercent=${closeDecision.randomPercent} " +
+                        "shouldReallyClose=${closeDecision.shouldReallyClose} action=$action",
+                )
+                if (closeDecision.shouldReallyClose) {
+                    removeOverlay()
+                    stopSelf()
+                } else {
+                    handleOpenClick(layoutName, clickType)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "close overlay click failed name=$closeViewName", e)
             }
+        }
+    }
+
+    private fun handleOpenClick(
+        layoutName: String,
+        clickType: String,
+    ) {
+        try {
+            FlutterBoomNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
+            val clickEvent =
+                TimerOverlayHelper.cacheClickEvent(
+                    context = applicationContext,
+                    layoutName = layoutName,
+                    clickType = clickType,
+                    content = pendingDisplayContent,
+                )
+            val started =
+                FlutterBoomNotificationPluginsPlugin.startTimerOverlayClickIntent(
+                    context = applicationContext,
+                    event = clickEvent,
+                )
+            stopSelf()
+            if (!started) {
+                TimerOverlayHelper.dispatchClickEvent(
+                    context = applicationContext,
+                    event = clickEvent,
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "overlay click failed", e)
         }
     }
 
