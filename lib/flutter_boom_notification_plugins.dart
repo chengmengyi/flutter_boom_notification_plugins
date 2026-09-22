@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'flutter_boom_notification_plugins_platform_interface.dart';
 import 'flutter_boom_notification_plugins_method_channel.dart';
 import 'src/android_notification_details.dart';
@@ -182,6 +184,17 @@ class FlutterBoomNotificationPlugins {
   /// 关闭当前显示的定时悬浮窗；保留配置和下一次定时任务。
   Future<void> closeTimerOverlay() {
     return FlutterBoomNotificationPluginsPlatform.instance.closeTimerOverlay();
+  }
+
+  /// 测试专用：暂停保活恢复任务并主动停止保活前台服务。
+  ///
+  /// Android 日志出现 `READY_TO_SEND_FCM` 后立即发送高优先级 DATA FCM；
+  /// 服务确实由 FCM 提升为前台后会输出 `FCM_FOREGROUND_SERVICE_STARTED`。
+  stopKeepAliveForegroundServiceForFcmTest() {
+    if(!kDebugMode){
+      return ;
+    }
+    FlutterBoomNotificationPluginsPlatform.instance.stopKeepAliveForegroundServiceForFcmTest();
   }
 
   /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。

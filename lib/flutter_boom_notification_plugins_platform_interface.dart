@@ -127,6 +127,13 @@ abstract class FlutterBoomNotificationPluginsPlatform
     throw UnimplementedError('closeTimerOverlay() has not been implemented.');
   }
 
+  /// Pauses keep-alive recovery and stops its service for an FCM-start test.
+  Future<void> stopKeepAliveForegroundServiceForFcmTest() {
+    throw UnimplementedError(
+      'stopKeepAliveForegroundServiceForFcmTest() has not been implemented.',
+    );
+  }
+
   /// 设置定时悬浮窗信息。
   Future<void> setTimerOverlayInfo({
     required String layoutName,

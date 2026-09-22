@@ -9,8 +9,44 @@ import com.google.firebase.messaging.RemoteMessage
 class LocalFirebaseMessageService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
+        val context = applicationContext
+        val deliveredPriority = remoteMessage.priority
+        val originalPriority = remoteMessage.originalPriority
+        if (deliveredPriority == RemoteMessage.PRIORITY_HIGH) {
+            Log.w(
+                KeepAliveNotificationHelper.FCM_TEST_LOG_TAG,
+                "FCM_HIGH_PRIORITY_RECEIVED originalPriority=$originalPriority deliveredPriority=$deliveredPriority",
+            )
+            val startRequested = try {
+                KeepAliveNotificationHelper.startOrUpdateForegroundService(
+                    context = context,
+                    reason = KeepAliveNotificationHelper.FCM_HIGH_PRIORITY_REASON,
+                    allowStartFailureRecovery = false,
+                )
+            } catch (e: Exception) {
+                Log.d(
+                    "LocalNotificationPlugin",
+                    "FCM foreground service failed error=${e.javaClass.simpleName}:${e.message}",
+                )
+                false
+            }
+            Log.d(
+                "LocalNotificationPlugin",
+                "FCM foreground service startRequested=$startRequested originalPriority=$originalPriority deliveredPriority=$deliveredPriority",
+            )
+            if (!startRequested) {
+                Log.e(
+                    KeepAliveNotificationHelper.FCM_TEST_LOG_TAG,
+                    "FCM_FOREGROUND_SERVICE_NOT_STARTED start request was rejected or skipped",
+                )
+            }
+        } else {
+            Log.d(
+                "LocalNotificationPlugin",
+                "FCM foreground service skipped originalPriority=$originalPriority deliveredPriority=$deliveredPriority",
+            )
+        }
         try {
-            val context = applicationContext
             val data = remoteMessage.data
             val title =
                 data["title"]

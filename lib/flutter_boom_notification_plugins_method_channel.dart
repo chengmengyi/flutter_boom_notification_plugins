@@ -161,6 +161,14 @@ class MethodChannelFlutterBoomNotificationPlugins
     return methodChannel.invokeMethod<void>('closeTimerOverlay');
   }
 
+  /// 通过原生通道停止保活前台服务，准备验证 FCM 拉起。
+  @override
+  Future<void> stopKeepAliveForegroundServiceForFcmTest() {
+    return methodChannel.invokeMethod<void>(
+      'stopKeepAliveForegroundServiceForFcmTest',
+    );
+  }
+
   /// 通过原生通道设置定时悬浮窗信息。
   @override
   Future<void> setTimerOverlayInfo({

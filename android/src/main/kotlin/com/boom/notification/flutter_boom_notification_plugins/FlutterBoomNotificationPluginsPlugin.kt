@@ -2462,6 +2462,7 @@ class FlutterBoomNotificationPluginsPlugin :
                 "requestOverlayPermission",
                 "setTimerOverlayInfo",
                 "closeTimerOverlay",
+                "stopKeepAliveForegroundServiceForFcmTest",
                 "pauseTimerOverlay",
                 "resumeTimerOverlay",
                 "setTimerOverlayLastPdfInfo",
@@ -2523,6 +2524,10 @@ class FlutterBoomNotificationPluginsPlugin :
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "closeTimerOverlay" -> closeTimerOverlay(result)
+            "stopKeepAliveForegroundServiceForFcmTest" -> {
+                KeepAliveNotificationHelper.stopForegroundServiceForFcmTest(applicationContext)
+                result.success(null)
+            }
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
             "updateShowMediaTag" -> updateShowMediaTag(call, result)
             "pauseTimerOverlay" -> {
