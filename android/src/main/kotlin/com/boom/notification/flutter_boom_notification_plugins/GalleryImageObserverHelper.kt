@@ -121,7 +121,7 @@ object GalleryImageObserverHelper {
             Log.d(TAG, "check skipped disabled reason=$reason")
             return
         }
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
             Log.d(TAG, "check skipped notification blocked reason=$reason")
             return
         }

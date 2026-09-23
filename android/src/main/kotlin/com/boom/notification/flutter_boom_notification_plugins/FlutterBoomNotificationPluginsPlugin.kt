@@ -365,7 +365,7 @@ class FlutterBoomNotificationPluginsPlugin :
             return normalizeManufacturer(Build.BRAND)
         }
 
-        fun isNotificationBlocked(context: Context): Boolean {
+        fun isNotificationMasterDisabled(context: Context): Boolean {
             return !NotificationRemoteConfigManager.areNotificationsEnabled(context)
         }
 
@@ -380,7 +380,7 @@ class FlutterBoomNotificationPluginsPlugin :
                     "media" -> NotificationRemoteConfigManager.KEY_MEDIA_ENABLED
                     "lock" -> NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED
                     in ACTION_PAYLOAD_TYPES -> NotificationRemoteConfigManager.KEY_BROADCAST_ENABLED
-                    else -> return !isNotificationBlocked(context)
+                    else -> return !isNotificationMasterDisabled(context)
                 }
             return NotificationRemoteConfigManager.isFeatureEnabled(context, key)
         }
@@ -462,8 +462,8 @@ class FlutterBoomNotificationPluginsPlugin :
         }
 
         fun showNotificationFromIntent(context: Context, intent: Intent) {
-            if (isNotificationBlocked(context)) {
-                Log.d(TAG, "showNotificationFromIntent blocked by manufacturer")
+            if (isNotificationMasterDisabled(context)) {
+                Log.d(TAG, "showNotificationFromIntent blocked by notification master switch")
                 return
             }
             if (intent.getBooleanExtra(EXTRA_CONFIG_DRIVEN_MEDIA, false)) {
@@ -2001,7 +2001,7 @@ class FlutterBoomNotificationPluginsPlugin :
                 Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
                 return false
             }
-            if (isNotificationBlocked(context)) {
+            if (isNotificationMasterDisabled(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification blocked reason=$reason")
                 return false
             }
@@ -2239,7 +2239,7 @@ class FlutterBoomNotificationPluginsPlugin :
             reason: String,
         ) {
             try {
-                if (isNotificationBlocked(context)) {
+                if (isNotificationMasterDisabled(context)) {
                     Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
                     return
                 }
@@ -2446,57 +2446,6 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext) && call.method != "initNotification") {
-            when (call.method) {
-                "configureBlockedManufacturers",
-                "isSamsungDevice",
-                "isKoreanLocale",
-                "getDeviceLanguage",
-                "getCountryCode",
-                "getPlatformVersion",
-                "consumeDisplayedNotificationCount",
-                "configureNativePushReporting",
-                "getNotificationAppLaunchDetails",
-                "consumeTimerOverlayClickEvent",
-                "checkOverlayPermission",
-                "requestOverlayPermission",
-                "setTimerOverlayInfo",
-                "updateCloseOverlayProbability",
-                "closeTimerOverlay",
-                "stopKeepAliveForegroundServiceForFcmTest",
-                "pauseTimerOverlay",
-                "resumeTimerOverlay",
-                "setTimerOverlayLastPdfInfo",
-                "updateShowMediaTag",
-                -> {}
-                "initNotification" -> {
-                    saveShowMediaTag(
-                        applicationContext,
-                        call.argument<Boolean>("showMedia") ?: true,
-                    )
-                    result.success(false)
-                    return
-                }
-                "moveAppToBack",
-                "isProcessingOverlayActive",
-                -> {
-                    result.success(false)
-                    return
-                }
-                "setGalleryImageNotificationInfo" -> {
-                    result.success(null)
-                    return
-                }
-                "consumeProcessingOverlayLaunchTaskId" -> {
-                    result.success(null)
-                    return
-                }
-                else -> {
-                    result.success(null)
-                    return
-                }
-            }
-        }
         when (call.method) {
             "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
             "consumeDisplayedNotificationCount" ->
@@ -2622,8 +2571,7 @@ class FlutterBoomNotificationPluginsPlugin :
         val manufacturers =
             call.argument<List<String>>("manufacturers") ?: emptyList()
         saveBlockedManufacturers(applicationContext, manufacturers)
-        if (isNotificationBlocked(applicationContext)) {
-            ProcessingOverlayService.close(applicationContext)
+        if (isNotificationMasterDisabled(applicationContext)) {
             KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
             BroadcastNotificationReceiverManager.disable(applicationContext)
         } else {
@@ -2722,10 +2670,6 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val taskId = call.argument<String>("taskId")
         if (taskId.isNullOrBlank()) {
             result.error("invalid_task_id", "taskId is required", null)
@@ -2785,10 +2729,6 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val taskId = call.argument<String>("taskId")
         if (taskId.isNullOrBlank()) {
             result.error("invalid_task_id", "taskId is required", null)
@@ -2932,15 +2872,13 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         saveGalleryImageNotificationConfig(
             context = applicationContext,
             title = call.argument<String>("title"),
         )
-        GalleryImageObserverHelper.start(applicationContext)
+        if (!isNotificationMasterDisabled(applicationContext)) {
+            GalleryImageObserverHelper.start(applicationContext)
+        }
         result.success(null)
     }
 
@@ -3099,7 +3037,6 @@ class FlutterBoomNotificationPluginsPlugin :
         args: NotificationBaseInitArgs,
     ) {
         if (!enabled) {
-            ProcessingOverlayService.close(applicationContext)
             GalleryImageObserverHelper.stop(applicationContext)
             BroadcastNotificationReceiverManager.disable(applicationContext)
             KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
@@ -3143,16 +3080,14 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 60L * 60L * 1000L
         KeepAliveNotificationHelper.saveWorkManagerConfig(
             context = applicationContext,
             intervalMillis = intervalMillis,
         )
-        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        if (!isNotificationMasterDisabled(applicationContext)) {
+            KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        }
         result.success(null)
     }
 
@@ -3160,7 +3095,7 @@ class FlutterBoomNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
+        if (isNotificationMasterDisabled(applicationContext)) {
             result.success(null)
             return
         }

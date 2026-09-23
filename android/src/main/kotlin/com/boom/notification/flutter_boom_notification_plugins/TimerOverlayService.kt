@@ -167,6 +167,11 @@ class TimerOverlayService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            if (NotificationRemoteConfigManager.getFloatingWindowConfig(applicationContext) == null) {
+                Log.d(TAG, "onStartCommand skipped, floating_window_config missing")
+                stopSelf()
+                return START_NOT_STICKY
+            }
             if (FlutterBoomNotificationPluginsPlugin.isDocumentScannerVisible(applicationContext)) {
                 Log.d(TAG, "onStartCommand skipped, document scanner visible")
                 stopSelf()

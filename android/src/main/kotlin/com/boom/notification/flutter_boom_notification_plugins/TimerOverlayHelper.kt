@@ -426,6 +426,10 @@ object TimerOverlayHelper {
         allowScannerVisibilitySettlement: Boolean = true,
         permissionAlreadyChecked: Boolean = false,
     ): Boolean {
+        if (NotificationRemoteConfigManager.getFloatingWindowConfig(context) == null) {
+            Log.d(TAG, "tryShowOverlay skipped, floating_window_config missing source=$source")
+            return false
+        }
         if (FlutterBoomNotificationPluginsPlugin.isDocumentScannerVisible(context)) {
             Log.d(TAG, "tryShowOverlay skipped, document scanner visible source=$source")
             return false

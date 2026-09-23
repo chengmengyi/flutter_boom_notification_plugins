@@ -479,8 +479,8 @@ object KeepAliveNotificationHelper {
         ignoreNotificationPermission: Boolean = false,
         allowStartFailureRecovery: Boolean = true,
     ): Boolean {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
+            Log.d(TAG, "startOrUpdateForegroundService blocked by notification master switch")
             return false
         }
         if (!ignoreNotificationPermission &&
@@ -552,7 +552,7 @@ object KeepAliveNotificationHelper {
         reason: String,
     ) {
         try {
-            if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
                 Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
                 return
             }
@@ -599,8 +599,8 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
     ): Boolean {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "ensureForegroundServiceAlive blocked by manufacturer")
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
+            Log.d(TAG, "ensureForegroundServiceAlive blocked by notification master switch")
             return false
         }
         return if (KeepAliveServiceState.isHealthy(context)) {
@@ -624,7 +624,7 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleKeepAliveWork(context: Context) {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
             return
         }
         if (readShortcutConfig(context) == null &&
@@ -658,7 +658,7 @@ object KeepAliveNotificationHelper {
         context: Context,
         immediate: Boolean = false,
     ) {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
             return
         }
         if (readShortcutConfig(context) == null) {
@@ -679,7 +679,7 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleLongPatrolJob(context: Context) {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
             return
         }
         if (readShortcutConfig(context) == null) {
@@ -697,8 +697,8 @@ object KeepAliveNotificationHelper {
         context: Context,
         mode: String,
     ) {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "handleJob blocked by manufacturer mode=$mode")
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
+            Log.d(TAG, "handleJob blocked by notification master switch mode=$mode")
             return
         }
         when (mode) {
@@ -723,8 +723,8 @@ object KeepAliveNotificationHelper {
         context: Context,
         source: String,
     ): Boolean {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "showStoredLocalNotification blocked by manufacturer source=$source")
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
+            Log.d(TAG, "showStoredLocalNotification blocked by notification master switch source=$source")
             return false
         }
         val config = readLocalConfig(context) ?: return false
@@ -900,7 +900,7 @@ object KeepAliveNotificationHelper {
         reason: String,
         delayMillis: Long = 8_000L,
     ) {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
             return
         }
         if (readShortcutConfig(context) == null) {
@@ -973,8 +973,8 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String?,
     ) {
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "handleRestartReceiver blocked by manufacturer reason=$reason")
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
+            Log.d(TAG, "handleRestartReceiver blocked by notification master switch reason=$reason")
             return
         }
         Log.d(TAG, "handleRestartReceiver reason=$reason")

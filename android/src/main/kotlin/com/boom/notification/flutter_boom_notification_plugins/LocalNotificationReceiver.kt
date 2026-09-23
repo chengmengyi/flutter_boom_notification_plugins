@@ -15,7 +15,7 @@ class LocalNotificationReceiver : BroadcastReceiver() {
         val appContext = context.applicationContext
         thread(name = "boom-local-notification-receiver") {
             try {
-                if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(appContext)) {
+                if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(appContext)) {
                     Log.d("LocalNotificationPlugin", "LocalNotificationReceiver blocked")
                     return@thread
                 }

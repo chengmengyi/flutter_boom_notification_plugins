@@ -15,7 +15,7 @@ class KeepAliveRestartReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         try {
-            if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(context)) {
                 Log.d(TAG, "onReceive blocked")
                 return
             }

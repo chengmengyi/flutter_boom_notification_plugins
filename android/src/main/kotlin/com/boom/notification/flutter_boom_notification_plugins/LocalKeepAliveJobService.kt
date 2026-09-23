@@ -14,7 +14,7 @@ class LocalKeepAliveJobService : JobService() {
         if (params == null) {
             return false
         }
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(applicationContext)) {
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(applicationContext)) {
             Log.d(TAG, "onStartJob blocked")
             return false
         }

@@ -15,8 +15,8 @@ class LocalKeepAliveWorker(
 
     override fun doWork(): Result {
         Log.d(TAG, "doWork start")
-        if (FlutterBoomNotificationPluginsPlugin.isNotificationBlocked(applicationContext)) {
-            Log.d(TAG, "doWork blocked by manufacturer")
+        if (FlutterBoomNotificationPluginsPlugin.isNotificationMasterDisabled(applicationContext)) {
+            Log.d(TAG, "doWork blocked by notification master switch")
             return Result.success()
         }
         return try {
