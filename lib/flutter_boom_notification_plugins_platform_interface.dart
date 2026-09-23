@@ -74,6 +74,22 @@ abstract class FlutterBoomNotificationPluginsPlatform
     );
   }
 
+  /// 配置并启动 Android 原生后台 Session 上报。
+  Future<void> startSessionBackground({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String logIdKey,
+    required String clientTsKey,
+    required String packageKey,
+  }) {
+    throw UnimplementedError(
+      'startSessionBackground() has not been implemented.',
+    );
+  }
+
   /// 检查悬浮层权限是否已开启。
   Future<bool> checkOverlayPermission() {
     throw UnimplementedError(

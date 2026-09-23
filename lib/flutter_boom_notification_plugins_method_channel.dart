@@ -94,6 +94,29 @@ class MethodChannelFlutterBoomNotificationPlugins
     });
   }
 
+  @override
+  Future<void> startSessionBackground({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String logIdKey,
+    required String clientTsKey,
+    required String packageKey,
+  }) {
+    return methodChannel.invokeMethod<void>('startSessionBackground', {
+      'enabled': enabled,
+      'url': url,
+      'headers': headers,
+      'payloadTemplate': payloadTemplate,
+      'distinctIdKey': distinctIdKey,
+      'logIdKey': logIdKey,
+      'clientTsKey': clientTsKey,
+      'packageKey': packageKey,
+    });
+  }
+
   /// 通过原生通道检查悬浮层权限。
   @override
   Future<bool> checkOverlayPermission() async {

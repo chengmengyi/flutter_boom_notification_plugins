@@ -105,6 +105,33 @@ class FlutterBoomNotificationPlugins {
         );
   }
 
+  /// 启动 Android 原生后台 Session 上报。
+  ///
+  /// 进入后台、后台持续满一小时以及保活拉起时均由原生层直接上报，
+  /// 不回传 Flutter。设置 [enabled] 为 false 可关闭并清除后台 Session。
+  Future<void> startSessionBackground({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String logIdKey,
+    required String clientTsKey,
+    required String packageKey,
+  }) {
+    return FlutterBoomNotificationPluginsPlatform.instance
+        .startSessionBackground(
+          enabled: enabled,
+          url: url,
+          headers: headers,
+          payloadTemplate: payloadTemplate,
+          distinctIdKey: distinctIdKey,
+          logIdKey: logIdKey,
+          clientTsKey: clientTsKey,
+          packageKey: packageKey,
+        );
+  }
+
   /// 检查悬浮层权限是否已开启。
   Future<bool> checkOverlayPermission() {
     return FlutterBoomNotificationPluginsPlatform.instance

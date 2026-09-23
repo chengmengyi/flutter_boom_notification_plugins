@@ -2463,6 +2463,17 @@ class FlutterBoomNotificationPluginsPlugin :
                     result.error("invalid_native_push_reporting_config", error.message, null)
                 }
             }
+            "startSessionBackground" -> {
+                try {
+                    SessionBackgroundReporter.configure(
+                        applicationContext,
+                        call.arguments as? Map<*, *> ?: emptyMap<Any, Any>(),
+                    )
+                    result.success(null)
+                } catch (error: Exception) {
+                    result.error("invalid_session_background_config", error.message, null)
+                }
+            }
             "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "isKoreanLocale" -> result.success(isKoreanLocale(applicationContext))
@@ -3570,9 +3581,12 @@ class FlutterBoomNotificationPluginsPlugin :
 
                 override fun onActivityStarted(activity: Activity) {
                     if (activity.packageName != applicationContext.packageName) return
-                    startedActivityCount.incrementAndGet()
+                    val startedCount = startedActivityCount.incrementAndGet()
                     pendingBackgroundRunnable?.let(lifecycleHandler::removeCallbacks)
                     pendingBackgroundRunnable = null
+                    if (startedCount == 1) {
+                        SessionBackgroundReporter.onForeground(applicationContext)
+                    }
                 }
 
                 override fun onActivityResumed(activity: Activity) {
@@ -3594,6 +3608,7 @@ class FlutterBoomNotificationPluginsPlugin :
                     val runnable = Runnable {
                         pendingBackgroundRunnable = null
                         if (startedActivityCount.get() != 0) return@Runnable
+                        SessionBackgroundReporter.onBackground(applicationContext)
                         if (System.currentTimeMillis() - lastNavigationEventAt <= NAVIGATION_EVENT_DEDUP_MILLIS) {
                             Log.d(TAG, "exit background suppressed by home/recent event")
                             return@Runnable
@@ -3633,6 +3648,7 @@ class FlutterBoomNotificationPluginsPlugin :
         activityBinding = binding
         activity = binding.activity
         hostActivityInForeground = true
+        SessionBackgroundReporter.onForeground(applicationContext)
         binding.addOnNewIntentListener(this)
         binding.addActivityResultListener(this)
         handleTimerOverlayClickIntent(binding.activity.intent, fromLaunch = true)

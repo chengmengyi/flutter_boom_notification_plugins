@@ -53,6 +53,9 @@ class KeepAliveForegroundService : Service() {
                 KeepAliveServiceState.heartbeat(applicationContext)
                 return START_STICKY
             }
+            // Reaching a non-healthy service start means the process has been pulled alive.
+            // Session reporting must not depend on notification config or permission checks below.
+            SessionBackgroundReporter.onKeepAliveStarted(applicationContext)
             if (KeepAliveServiceState.state == KeepAliveServiceState.State.STARTED) {
                 KeepAliveServiceState.markIdle(applicationContext, "health_check_failed:$reason")
             }
